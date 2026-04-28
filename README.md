@@ -25,3 +25,8 @@ A modelagem do banco de dados foca nas quatro entidades essenciais para o funcio
 2. **Campeonatos:** Agrupa as configurações gerais da liga.
 3. **Times:** Equipes que competem no campeonato.
 4. **Partidas:** Registra os confrontos entre os times e os placares finais.
+
+## 🗄️ Modelagem de Dados
+Aqui está a estrutura das tabelas do Placar.IO:
+
+![Diagrama do Banco de Dados](./docs/DB-Placar.IO.png)
