@@ -29,4 +29,4 @@ A modelagem do banco de dados foca nas quatro entidades essenciais para o funcio
 ## 🗄️ Modelagem de Dados
 Aqui está a estrutura das tabelas do Placar.IO:
 
-![Diagrama do Banco de Dados](./docs/DB-Placar.IO.png)
+![Diagrama do Banco de Dados](./docs/DB-PLACAR.IO.png)
