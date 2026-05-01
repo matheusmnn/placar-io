@@ -6,10 +6,10 @@
     "dev": "nodemon server.js",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["ligas-amadoras", "arquitetura-de-software", "modelagem-de-dados", "desenvolvimento-web", "round-robin", "campeonatos"],
+  "author": "Matheus Martins Nunes",
   "license": "ISC",
-  "description": "",
+  "description": "Este projeto simula um gerenciador de tabelas de campeonatos!",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
