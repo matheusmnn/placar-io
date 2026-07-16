@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: placar-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/placar}
+    username: ${DB_USER:placar}
+    password: ${DB_PASSWORD:placar}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:c2VjcmV0LXBsYWNhci1pby1kZXYtb25seS1jaGFuZ2UtbWUtcGxlYXNlLTEyMzQ1Ng==}
+    expiration-ms: ${APP_JWT_EXPIRATION_MS:86400000}
+  cors:
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173,http://localhost:4173}
+
+logging:
+  level:
+    org.flywaydb: INFO

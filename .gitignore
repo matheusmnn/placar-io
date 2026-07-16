@@ -1,23 +1,16 @@
+# dependências
+**/node_modules/
 
-node_modules/
+# builds
+**/target/
+**/dist/
 
+# variáveis de ambiente
+**/.env
 
-.env
-.env.local
-
-
-dist/
-
-
-npm-debug.log*
+# logs
 *.log
 
-
-.vscode/
-.DS_Store
-
-
-docs/PLANO.md
-
-
-.claude/
+# IntelliJ / VSCode
+.idea/
+*.iml

@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: placar-postgres
+    environment:
+      POSTGRES_DB: placar
+      POSTGRES_USER: placar
+      POSTGRES_PASSWORD: placar
+    ports:
+      - "5432:5432"
+    volumes:
+      - placar_pgdata:/var/lib/postgresql/data
+
+volumes:
+  placar_pgdata:
