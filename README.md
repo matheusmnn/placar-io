@@ -73,7 +73,6 @@ sessão e protegendo as rotas do organizador.
 - **Recuperação de senha**: o envio de e-mail e a redefinição de senha não foram
   implementados.
 - **Notificações e e-mails** (por exemplo, avisar os times sobre as próximas partidas).
-- **Busca de campeonatos** na página inicial.
 - **Upload de imagem** para escudos dos times e logo do campeonato (as imagens só podem ser
   informadas por URL).
 - **Critérios de desempate no mata-mata** (prorrogação/pênaltis): a partida eliminatória

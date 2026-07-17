@@ -22,11 +22,16 @@ function formatarData(iso: string | null): string | null {
   return d && m && y ? `${d}/${m}/${y}` : iso;
 }
 
+function semAcento(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+}
+
 export function PublicHome() {
   const navigate = useNavigate();
   const { isLogged } = useAuth();
   const [campeonatos, setCampeonatos] = useState<CampeonatoResumoPublico[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busca, setBusca] = useState('');
 
   useEffect(() => {
     api.publicoListar()
@@ -34,6 +39,8 @@ export function PublicHome() {
       .catch(() => setCampeonatos([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const filtrados = campeonatos.filter(c => semAcento(c.nome).includes(semAcento(busca.trim())));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -84,11 +91,17 @@ export function PublicHome() {
       <section className="max-w-7xl mx-auto px-8 py-10 pb-24">
         <div className="flex items-center justify-between mb-6">
           <p className="text-sm text-gray-500">
-            {loading ? 'Carregando...' : `${campeonatos.length} campeonato${campeonatos.length === 1 ? '' : 's'}`}
+            {loading ? 'Carregando...' : `${filtrados.length} campeonato${filtrados.length === 1 ? '' : 's'}`}
           </p>
-          <div className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-400 w-64 cursor-text">
-            <Search className="w-4 h-4 shrink-0" />
-            <span>Buscar campeonato...</span>
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar campeonato..."
+              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-green-600"
+            />
           </div>
         </div>
 
@@ -112,9 +125,15 @@ export function PublicHome() {
               {isLogged ? 'Criar campeonato' : 'Criar conta'}
             </Button>
           </div>
+        ) : filtrados.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 py-16 px-8 text-center">
+            <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-700 font-semibold">Nenhum campeonato encontrado</p>
+            <p className="text-gray-500 text-sm mt-1">Nada corresponde a “{busca.trim()}”.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-3 gap-6">
-            {campeonatos.map(champ => (
+            {filtrados.map(champ => (
               <Card key={champ.id} className="overflow-hidden hover:shadow-md transition-shadow border-gray-200">
                 <div className="h-1.5 bg-green-600" />
                 <CardHeader className="pb-2 pt-5">
