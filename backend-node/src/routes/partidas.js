@@ -19,6 +19,11 @@ async function assertOwnedPartida(usuarioId, partidaId) {
 const resultadoSchema = z.object({
   golsMandante: z.number().int().min(0).max(99),
   golsVisitante: z.number().int().min(0).max(99),
+  prorrogacao: z.boolean().optional(),
+  golsMandanteProrr: z.number().int().min(0).max(99).nullable().optional(),
+  golsVisitanteProrr: z.number().int().min(0).max(99).nullable().optional(),
+  penaltisMandante: z.number().int().min(0).max(99).nullable().optional(),
+  penaltisVisitante: z.number().int().min(0).max(99).nullable().optional(),
   gols: z
     .array(
       z.object({

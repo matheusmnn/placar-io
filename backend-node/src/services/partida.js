@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { badRequest } from '../lib/http.js';
 import { pontosCorridos, mataMataPrimeiraFase, proximaPotenciaDeDois, faseLabel, BYE } from './chaveamento.js';
+import { resolverConfronto } from './confronto.js';
 
 export async function gerarRodadas(campeonatoId) {
   const camp = await prisma.campeonato.findUnique({ where: { id: campeonatoId } });
@@ -24,30 +25,77 @@ export async function gerarRodadas(campeonatoId) {
       })),
     });
   } else {
-    const label = faseLabel(proximaPotenciaDeDois(times.length));
-    const pares = mataMataPrimeiraFase(times.length);
-    for (const par of pares) {
-      const mandanteId = times[par.mandante].id;
-      const visitanteId = par.visitante === BYE ? null : times[par.visitante].id;
-      await prisma.partida.create({
-        data: {
-          campeonatoId,
-          mandanteId,
-          visitanteId,
-          rodada: 1,
-          ordemFase: par.ordem,
-          fase: label,
-          status: visitanteId == null ? 'CONCLUIDA' : 'AGENDADA',
-        },
-      });
-    }
+    await criarFaseKO(camp, 1, faseLabel(proximaPotenciaDeDois(times.length)), mataMataPrimeiraFase(times.length).map((par) => ({
+      mandanteId: times[par.mandante].id,
+      visitanteId: par.visitante === BYE ? null : times[par.visitante].id,
+      ordemFase: par.ordem,
+    })));
   }
 
   await prisma.campeonato.update({ where: { id: campeonatoId }, data: { status: 'EM_ANDAMENTO' } });
 
-  if (camp.formato === 'MATA_MATA') await verificarAvancoMataMata(campeonatoId, 1);
+  if (camp.formato === 'MATA_MATA') await verificarAvancoMataMata(camp, 1);
 
   return listarRodadas(campeonatoId);
+}
+
+// Cria uma fase de KO com todos os confrontos (opcionalmente em ida+volta).
+// `confrontos` é um array de { mandanteId, visitanteId|null (bye), ordemFase }.
+async function criarFaseKO(camp, rodada, label, confrontos) {
+  for (const c of confrontos) {
+    const bye = c.visitanteId == null;
+    if (bye) {
+      await prisma.partida.create({
+        data: {
+          campeonatoId: camp.id,
+          mandanteId: c.mandanteId,
+          visitanteId: null,
+          rodada,
+          fase: label,
+          ordemFase: c.ordemFase,
+          legOrdem: null,
+          status: 'CONCLUIDA',
+        },
+      });
+      continue;
+    }
+    if (camp.idaVolta) {
+      await prisma.partida.create({
+        data: {
+          campeonatoId: camp.id,
+          mandanteId: c.mandanteId,
+          visitanteId: c.visitanteId,
+          rodada,
+          fase: label,
+          ordemFase: c.ordemFase,
+          legOrdem: 1,
+        },
+      });
+      await prisma.partida.create({
+        data: {
+          campeonatoId: camp.id,
+          mandanteId: c.visitanteId,
+          visitanteId: c.mandanteId,
+          rodada,
+          fase: label,
+          ordemFase: c.ordemFase,
+          legOrdem: 2,
+        },
+      });
+    } else {
+      await prisma.partida.create({
+        data: {
+          campeonatoId: camp.id,
+          mandanteId: c.mandanteId,
+          visitanteId: c.visitanteId,
+          rodada,
+          fase: label,
+          ordemFase: c.ordemFase,
+          legOrdem: null,
+        },
+      });
+    }
+  }
 }
 
 export async function registrarResultado(partidaId, req) {
@@ -59,8 +107,28 @@ export async function registrarResultado(partidaId, req) {
   if (p.mandanteId == null || p.visitanteId == null) throw badRequest('Essa partida não pode receber resultado');
 
   const mataMata = p.campeonato.formato === 'MATA_MATA';
-  if (mataMata && req.golsMandante === req.golsVisitante) {
-    throw badRequest('No mata-mata a partida precisa ter um vencedor');
+
+  // Monta a partida "simulada" (como ficaria após a gravação) pra validar.
+  const partidaSimulada = {
+    ...p,
+    golsMandante: req.golsMandante,
+    golsVisitante: req.golsVisitante,
+    status: 'CONCLUIDA',
+    prorrogacao: req.prorrogacao ?? false,
+    golsMandanteProrr: req.golsMandanteProrr ?? null,
+    golsVisitanteProrr: req.golsVisitanteProrr ?? null,
+    penaltisMandante: req.penaltisMandante ?? null,
+    penaltisVisitante: req.penaltisVisitante ?? null,
+  };
+
+  if (mataMata) {
+    const legs = await legsDoConfronto(p, partidaSimulada);
+    const outraLegPendente = legs.some((l) => l.id !== p.id && l.status !== 'CONCLUIDA');
+    if (!outraLegPendente) {
+      // Esta é a última leg: resultado precisa decidir o confronto.
+      const r = resolverConfronto(legs);
+      if (!r) throw badRequest(mensagemDesempate(p.campeonato.koDesempate));
+    }
   }
 
   const golsNovos = await validarGols(p, req);
@@ -74,6 +142,11 @@ export async function registrarResultado(partidaId, req) {
       data: {
         golsMandante: req.golsMandante,
         golsVisitante: req.golsVisitante,
+        prorrogacao: req.prorrogacao ?? false,
+        golsMandanteProrr: req.golsMandanteProrr ?? null,
+        golsVisitanteProrr: req.golsVisitanteProrr ?? null,
+        penaltisMandante: req.penaltisMandante ?? null,
+        penaltisVisitante: req.penaltisVisitante ?? null,
         status: 'CONCLUIDA',
       },
     }),
@@ -81,10 +154,32 @@ export async function registrarResultado(partidaId, req) {
     prisma.cartao.createMany({ data: cartoesNovos }),
   ]);
 
-  if (mataMata) await verificarAvancoMataMata(p.campeonatoId, p.rodada);
+  if (mataMata) await verificarAvancoMataMata(p.campeonato, p.rodada);
   else await verificarEncerramento(p.campeonatoId);
 
   return detalhe(partidaId);
+}
+
+function mensagemDesempate(ko) {
+  return ko === 'PRORROGACAO_PENALTIS'
+    ? 'Confronto empatado — informe prorrogação e/ou pênaltis'
+    : 'Confronto empatado — informe os pênaltis';
+}
+
+async function legsDoConfronto(partidaOriginal, partidaSimulada) {
+  // Se não tem legOrdem, é jogo único: só uma leg.
+  if (partidaOriginal.legOrdem == null) return [partidaSimulada];
+  const outras = await prisma.partida.findMany({
+    where: {
+      campeonatoId: partidaOriginal.campeonatoId,
+      rodada: partidaOriginal.rodada,
+      ordemFase: partidaOriginal.ordemFase,
+      id: { not: partidaOriginal.id },
+    },
+  });
+  const todas = [...outras, partidaSimulada];
+  todas.sort((a, b) => (a.legOrdem ?? 0) - (b.legOrdem ?? 0));
+  return todas;
 }
 
 async function validarGols(p, req) {
@@ -129,44 +224,48 @@ async function validarJogador(jogadorId, timeId) {
   if (j.timeId !== timeId) throw badRequest('O jogador não pertence ao time informado');
 }
 
-async function verificarAvancoMataMata(campeonatoId, rodada) {
+async function verificarAvancoMataMata(camp, rodada) {
   const faseAtual = await prisma.partida.findMany({
-    where: { campeonatoId, rodada },
-    orderBy: [{ ordemFase: 'asc' }, { id: 'asc' }],
-    include: { mandante: true, visitante: true },
+    where: { campeonatoId: camp.id, rodada },
+    orderBy: [{ ordemFase: 'asc' }, { legOrdem: 'asc' }, { id: 'asc' }],
   });
   if (faseAtual.length === 0) return;
   if (!faseAtual.every((p) => p.status === 'CONCLUIDA')) return;
 
-  const vencedores = faseAtual.map(vencedor).filter(Boolean);
+  // Agrupa por ordemFase (um confronto pode ter 1 ou 2 legs).
+  const porConfronto = new Map();
+  for (const p of faseAtual) {
+    const key = p.ordemFase ?? 0;
+    if (!porConfronto.has(key)) porConfronto.set(key, []);
+    porConfronto.get(key).push(p);
+  }
+
+  const vencedores = [];
+  for (const [, legs] of [...porConfronto].sort((a, b) => a[0] - b[0])) {
+    legs.sort((a, b) => (a.legOrdem ?? 0) - (b.legOrdem ?? 0));
+    const r = resolverConfronto(legs);
+    if (!r) return; // confronto sem decisão — não avança
+    vencedores.push(r.vencedorId);
+  }
+
   if (vencedores.length === 1) {
-    await prisma.campeonato.update({ where: { id: campeonatoId }, data: { status: 'ENCERRADO' } });
+    await prisma.campeonato.update({ where: { id: camp.id }, data: { status: 'ENCERRADO' } });
     return;
   }
-  const proxima = await prisma.partida.count({ where: { campeonatoId, rodada: rodada + 1 } });
+
+  const proxima = await prisma.partida.count({ where: { campeonatoId: camp.id, rodada: rodada + 1 } });
   if (proxima > 0) return;
 
   const label = faseLabel(vencedores.length);
-  const novas = [];
+  const confrontos = [];
   for (let i = 0; i < vencedores.length / 2; i++) {
-    novas.push({
-      campeonatoId,
+    confrontos.push({
       mandanteId: vencedores[2 * i],
       visitanteId: vencedores[2 * i + 1],
-      rodada: rodada + 1,
       ordemFase: i,
-      fase: label,
     });
   }
-  await prisma.partida.createMany({ data: novas });
-}
-
-function vencedor(p) {
-  if (p.visitanteId == null) return p.mandanteId;
-  if (p.mandanteId == null) return p.visitanteId;
-  const gm = p.golsMandante ?? 0;
-  const gv = p.golsVisitante ?? 0;
-  return gm >= gv ? p.mandanteId : p.visitanteId;
+  await criarFaseKO(camp, rodada + 1, label, confrontos);
 }
 
 async function verificarEncerramento(campeonatoId) {
@@ -183,7 +282,7 @@ export async function listarRodadas(campeonatoId) {
   if (!c) throw badRequest('Campeonato não encontrado');
   const partidas = await prisma.partida.findMany({
     where: { campeonatoId },
-    orderBy: [{ rodada: 'asc' }, { ordemFase: 'asc' }, { id: 'asc' }],
+    orderBy: [{ rodada: 'asc' }, { ordemFase: 'asc' }, { legOrdem: 'asc' }, { id: 'asc' }],
     include: {
       mandante: { select: { id: true, nome: true, escudoUrl: true } },
       visitante: { select: { id: true, nome: true, escudoUrl: true } },
@@ -212,6 +311,7 @@ export function toPartidaDto(p) {
     rodada: p.rodada,
     fase: p.fase,
     ordemFase: p.ordemFase,
+    legOrdem: p.legOrdem,
     status: p.status,
     dataPartida: p.dataPartida,
     local: p.local,
@@ -219,6 +319,11 @@ export function toPartidaDto(p) {
     visitante: p.visitante,
     golsMandante: p.golsMandante,
     golsVisitante: p.golsVisitante,
+    prorrogacao: p.prorrogacao,
+    golsMandanteProrr: p.golsMandanteProrr,
+    golsVisitanteProrr: p.golsVisitanteProrr,
+    penaltisMandante: p.penaltisMandante,
+    penaltisVisitante: p.penaltisVisitante,
   };
 }
 

@@ -25,10 +25,13 @@ Espelham o contrato que o `frontend/src/lib/api.ts` já consome.
 - `GET /api/public/campeonatos`, `GET /api/public/campeonatos/:id`
 - `GET /api/public/campeonatos/:id/classificacao|artilharia|rodadas`
 
-## O que está em escopo nesta fatia
+## O que está em escopo até aqui (Fatia 2)
 
-- Formatos: `PONTOS_CORRIDOS` (ida ou ida+volta) e `MATA_MATA` (jogo único, bye em potência de 2).
+- Formatos: `PONTOS_CORRIDOS` (ida ou ida+volta) e `MATA_MATA` (jogo único **ou ida+volta**, bye em potência de 2).
+- **Mata-mata**: `Campeonato.idaVolta` também vale pra KO; `Campeonato.koDesempate` define `PENALTIS` (direto) ou `PRORROGACAO_PENALTIS`. Em ida+volta, cada par vira 2 partidas (`legOrdem` 1 e 2, mesma `ordemFase`); a resolução usa agregado → prorrogação (se habilitada) → pênaltis.
 - Permissão: owner-only (mesmo modelo do Spring).
-- Súmula: lote por `PUT /partidas/:id/resultado` (compatível com a tela atual do frontend).
+- Súmula: lote por `PUT /partidas/:id/resultado`, agora aceitando `prorrogacao`, `golsMandanteProrr/Visitante`, `penaltisMandante/Visitante`.
 
-Fatias seguintes trazem: mata-mata ida+volta com prorrogação/pênaltis, grupos e híbridos, critérios de desempate configuráveis, playoff dinâmico, juiz delegado com súmula granular, stats, tema escuro.
+Após mudar o schema, aplicar com `npx prisma db push` de novo.
+
+Fatias seguintes: grupos e híbridos, critérios de desempate configuráveis, playoff dinâmico, juiz delegado com súmula granular, stats, tema escuro.

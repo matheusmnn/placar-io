@@ -38,6 +38,11 @@ enum TipoCartao {
   VERMELHO
 }
 
+enum KoDesempate {
+  PENALTIS
+  PRORROGACAO_PENALTIS
+}
+
 model Usuario {
   id          Int          @id @default(autoincrement())
   nome        String
@@ -57,6 +62,7 @@ model Campeonato {
   pontosVitoria Int              @default(3)
   pontosEmpate  Int              @default(1)
   idaVolta      Boolean          @default(false)
+  koDesempate   KoDesempate      @default(PENALTIS)
   dataInicio    DateTime?
   dataFim       DateTime?
   descricao     String?
@@ -104,6 +110,12 @@ model Partida {
   rodada          Int
   fase            String?
   ordemFase       Int?
+  legOrdem        Int?
+  prorrogacao        Boolean       @default(false)
+  golsMandanteProrr  Int?
+  golsVisitanteProrr Int?
+  penaltisMandante   Int?
+  penaltisVisitante  Int?
   status          StatusPartida @default(AGENDADA)
   dataPartida     DateTime?
   local           String?
