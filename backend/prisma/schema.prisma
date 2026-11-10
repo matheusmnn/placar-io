@@ -1,0 +1,321 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Formato {
+  PONTOS_CORRIDOS
+  MATA_MATA
+  GRUPOS
+  GRUPOS_MATA_MATA
+  PONTOS_CORRIDOS_MATA_MATA
+}
+
+enum StatusCampeonato {
+  NAO_INICIADO
+  EM_ANDAMENTO
+  ENCERRADO
+}
+
+enum StatusPartida {
+  AGENDADA
+  EM_ANDAMENTO
+  CONCLUIDA
+}
+
+enum Posicao {
+  GOLEIRO
+  ZAGUEIRO
+  LATERAL
+  VOLANTE
+  MEIA
+  ATACANTE
+}
+
+enum TipoCartao {
+  AMARELO
+  VERMELHO
+}
+
+enum KoDesempate {
+  PENALTIS
+  PRORROGACAO_PENALTIS
+}
+
+enum FuncaoComissao {
+  TECNICO
+  ASSISTENTE_TECNICO
+  MEDICO
+  TREINADOR_GOLEIROS
+  PREPARADOR_FISICO
+  FISIOTERAPEUTA
+  MASSAGISTA
+}
+
+enum TipoEscalacao {
+  TITULAR
+  RESERVA
+}
+
+enum Periodo {
+  PRIMEIRO_TEMPO
+  SEGUNDO_TEMPO
+}
+
+enum TipoGol {
+  NORMAL
+  PENALTI
+  CONTRA
+  FALTA
+}
+
+enum ChaveStat {
+  FINALIZACOES
+  FINALIZACOES_NO_GOL
+  ESCANTEIOS
+  FALTAS
+  IMPEDIMENTOS
+  POSSE
+}
+
+model Usuario {
+  id                   Int               @id @default(autoincrement())
+  nome                 String
+  email                String            @unique
+  senhaHash            String
+  createdAt            DateTime          @default(now())
+  campeonatos          Campeonato[]
+  partidasComoJuiz     Partida[]         @relation("JuizPartida")
+  auxiliariasEm        PartidaAuxiliar[]
+}
+
+model Campeonato {
+  id            Int              @id @default(autoincrement())
+  usuarioId     Int
+  usuario       Usuario          @relation(fields: [usuarioId], references: [id])
+  nome          String
+  formato       Formato          @default(PONTOS_CORRIDOS)
+  status        StatusCampeonato @default(NAO_INICIADO)
+  pontosVitoria Int              @default(3)
+  pontosEmpate  Int              @default(1)
+  idaVolta      Boolean          @default(false)
+  koDesempate   KoDesempate      @default(PENALTIS)
+  numGrupos          Int?
+  avancamPorGrupo    Int?
+  criteriosDesempate Json?
+  playoff            Json?
+  dataInicio    DateTime?
+  dataFim       DateTime?
+  descricao     String?
+  logoUrl       String?
+  createdAt     DateTime         @default(now())
+  times         Time[]
+  partidas      Partida[]
+  grupos        Grupo[]
+}
+
+model Time {
+  id              Int               @id @default(autoincrement())
+  campeonatoId    Int
+  campeonato      Campeonato        @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  grupoId         Int?
+  grupo           Grupo?            @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+  nome            String
+  cidade          String?
+  escudoUrl       String?
+  jogadores       Jogador[]
+  mandanteEm      Partida[]         @relation("Mandante")
+  visitanteEm     Partida[]         @relation("Visitante")
+  gols            Gol[]
+  cartoes         Cartao[]
+  comissao        ComissaoTecnica[]
+  substituicoesEm Substituicao[]
+  stats           StatPartida[]
+}
+
+model Grupo {
+  id           Int        @id @default(autoincrement())
+  campeonatoId Int
+  campeonato   Campeonato @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  nome         String
+  times        Time[]
+  partidas     Partida[]
+
+  @@unique([campeonatoId, nome])
+}
+
+model Jogador {
+  id            Int                 @id @default(autoincrement())
+  timeId        Int
+  time          Time                @relation(fields: [timeId], references: [id], onDelete: Cascade)
+  numero        Int?
+  nome          String
+  apelido       String?
+  nomeCompleto  String?
+  registro      String?
+  profissional  Boolean             @default(true)
+  posicao       Posicao?
+  gols          Gol[]
+  cartoes       Cartao[]
+  escalacoes    PartidaEscalacao[]
+  entrou        Substituicao[]      @relation("Entrou")
+  saiu          Substituicao[]      @relation("Saiu")
+}
+
+model ComissaoTecnica {
+  id     Int            @id @default(autoincrement())
+  timeId Int
+  time   Time           @relation(fields: [timeId], references: [id], onDelete: Cascade)
+  nome   String
+  funcao FuncaoComissao
+}
+
+model Partida {
+  id              Int           @id @default(autoincrement())
+  campeonatoId    Int
+  campeonato      Campeonato    @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  mandanteId      Int?
+  mandante        Time?         @relation("Mandante", fields: [mandanteId], references: [id])
+  visitanteId     Int?
+  visitante       Time?         @relation("Visitante", fields: [visitanteId], references: [id])
+  golsMandante    Int?
+  golsVisitante   Int?
+  rodada          Int
+  fase            String?
+  ordemFase       Int?
+  legOrdem        Int?
+  grupoId         Int?
+  grupo           Grupo?        @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+  prorrogacao        Boolean    @default(false)
+  golsMandanteProrr  Int?
+  golsVisitanteProrr Int?
+  penaltisMandante   Int?
+  penaltisVisitante  Int?
+  status          StatusPartida @default(AGENDADA)
+  dataPartida     DateTime?
+  local           String?
+
+  // Arbitragem (súmula CBF-style). Apenas juizId tem relação FK; os demais são
+  // só IDs de Usuario validados no app. Ponytail: evita 7 relações redundantes.
+  juizId           Int?
+  juiz             Usuario? @relation("JuizPartida", fields: [juizId], references: [id])
+  assistente1Id    Int?
+  assistente2Id    Int?
+  quartoArbitroId  Int?
+  varId            Int?
+  avarId           Int?
+  avar2Id          Int?
+  observadorVarId  Int?
+
+  // Cronologia (minutos nos campos de acréscimo)
+  entradaMandante   DateTime?
+  entradaVisitante  DateTime?
+  inicio1T          DateTime?
+  termino1T         DateTime?
+  acrescimo1T       Int?
+  inicio2T          DateTime?
+  termino2T         DateTime?
+  acrescimo2T       Int?
+  placar1TMandante  Int?
+  placar1TVisitante Int?
+
+  // Observações livres
+  ocorrencias          String?
+  motivoAtraso         String?
+  observacoesEventuais String?
+  relatorioAssistente  String?
+
+  gols            Gol[]
+  cartoes         Cartao[]
+  escalacoes      PartidaEscalacao[]
+  substituicoes   Substituicao[]
+  auxiliares      PartidaAuxiliar[]
+  stats           StatPartida[]
+
+  @@index([campeonatoId])
+}
+
+model StatPartida {
+  id        Int       @id @default(autoincrement())
+  partidaId Int
+  partida   Partida   @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  timeId    Int
+  time      Time      @relation(fields: [timeId], references: [id])
+  chave     ChaveStat
+  valor     Int
+
+  @@unique([partidaId, timeId, chave])
+  @@index([partidaId])
+}
+
+model PartidaAuxiliar {
+  partidaId Int
+  partida   Partida @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  usuarioId Int
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([partidaId, usuarioId])
+}
+
+model PartidaEscalacao {
+  id        Int           @id @default(autoincrement())
+  partidaId Int
+  partida   Partida       @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  jogadorId Int
+  jogador   Jogador       @relation(fields: [jogadorId], references: [id], onDelete: Cascade)
+  tipo      TipoEscalacao
+
+  @@unique([partidaId, jogadorId])
+}
+
+model Substituicao {
+  id               Int     @id @default(autoincrement())
+  partidaId        Int
+  partida          Partida @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  timeId           Int
+  time             Time    @relation(fields: [timeId], references: [id])
+  tempoSegundos    Int?
+  periodo          Periodo
+  entrouJogadorId  Int
+  entrouJogador    Jogador @relation("Entrou", fields: [entrouJogadorId], references: [id])
+  saiuJogadorId    Int
+  saiuJogador      Jogador @relation("Saiu", fields: [saiuJogadorId], references: [id])
+
+  @@index([partidaId])
+}
+
+model Gol {
+  id            Int      @id @default(autoincrement())
+  partidaId     Int
+  partida       Partida  @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  timeId        Int
+  time          Time     @relation(fields: [timeId], references: [id])
+  jogadorId     Int?
+  jogador       Jogador? @relation(fields: [jogadorId], references: [id])
+  minuto        Int?
+  tempoSegundos Int?
+  tipo          TipoGol  @default(NORMAL)
+
+  @@index([partidaId])
+}
+
+model Cartao {
+  id              Int        @id @default(autoincrement())
+  partidaId       Int
+  partida         Partida    @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  timeId          Int
+  time            Time       @relation(fields: [timeId], references: [id])
+  jogadorId       Int?
+  jogador         Jogador?   @relation(fields: [jogadorId], references: [id])
+  tipo            TipoCartao
+  minuto          Int?
+  tempoSegundos   Int?
+  motivoCodigo    String?
+  motivoDescricao String?
+
+  @@index([partidaId])
+}

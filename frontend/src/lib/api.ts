@@ -4,11 +4,44 @@ const BASE_URL = (import.meta.env.VITE_API_URL as string) ?? 'http://localhost:8
 const TOKEN_KEY = 'placar.token';
 const USER_KEY = 'placar.user';
 
-export type Formato = 'PONTOS_CORRIDOS' | 'MATA_MATA';
+export type Formato =
+  | 'PONTOS_CORRIDOS'
+  | 'MATA_MATA'
+  | 'GRUPOS'
+  | 'GRUPOS_MATA_MATA'
+  | 'PONTOS_CORRIDOS_MATA_MATA';
 export type StatusCampeonato = 'NAO_INICIADO' | 'EM_ANDAMENTO' | 'ENCERRADO';
 export type StatusPartida = 'AGENDADA' | 'EM_ANDAMENTO' | 'CONCLUIDA';
 export type Posicao = 'GOLEIRO' | 'ZAGUEIRO' | 'LATERAL' | 'VOLANTE' | 'MEIA' | 'ATACANTE';
 export type TipoCartao = 'AMARELO' | 'VERMELHO';
+export type KoDesempate = 'PENALTIS' | 'PRORROGACAO_PENALTIS';
+export type TipoGol = 'NORMAL' | 'PENALTI' | 'CONTRA' | 'FALTA';
+export type TipoEscalacao = 'TITULAR' | 'RESERVA';
+export type Periodo = 'PRIMEIRO_TEMPO' | 'SEGUNDO_TEMPO';
+export type FuncaoComissao =
+  | 'TECNICO'
+  | 'ASSISTENTE_TECNICO'
+  | 'MEDICO'
+  | 'TREINADOR_GOLEIROS'
+  | 'PREPARADOR_FISICO'
+  | 'FISIOTERAPEUTA'
+  | 'MASSAGISTA';
+export type ChaveStat =
+  | 'FINALIZACOES'
+  | 'FINALIZACOES_NO_GOL'
+  | 'ESCANTEIOS'
+  | 'FALTAS'
+  | 'IMPEDIMENTOS'
+  | 'POSSE';
+export type CriterioDesempate = 'saldo' | 'golsPro' | 'golsContra' | 'vitorias' | 'sorteio';
+
+export interface PlayoffConfig {
+  posicoes: number[];
+  chaveamento: [number, number][];
+  temFinal?: boolean;
+  idaVolta?: boolean;
+  desempate?: KoDesempate;
+}
 
 export interface Usuario { id: number; nome: string; email: string; }
 export interface AuthResponse { token: string; usuario: Usuario; }
@@ -21,6 +54,11 @@ export interface Campeonato {
   pontosVitoria: number;
   pontosEmpate: number;
   idaVolta: boolean;
+  koDesempate: KoDesempate;
+  numGrupos: number | null;
+  avancamPorGrupo: number | null;
+  criteriosDesempate: CriterioDesempate[] | null;
+  playoff: PlayoffConfig | null;
   dataInicio: string | null;
   dataFim: string | null;
   descricao: string | null;
@@ -33,8 +71,24 @@ export interface CampeonatosResponse {
   campeonatos: Campeonato[];
 }
 
-export interface Time { id: number; campeonatoId: number; nome: string; cidade: string | null; escudoUrl: string | null; }
-export interface Jogador { id: number; timeId: number; numero: number | null; nome: string; posicao: Posicao | null; }
+export interface Time {
+  id: number; campeonatoId: number; nome: string;
+  cidade: string | null; escudoUrl: string | null;
+  grupoId: number | null;
+}
+
+export interface Jogador {
+  id: number; timeId: number;
+  numero: number | null; nome: string;
+  apelido: string | null;
+  nomeCompleto: string | null;
+  registro: string | null;
+  profissional: boolean;
+  posicao: Posicao | null;
+}
+
+export interface Grupo { id: number; campeonatoId: number; nome: string; times: Time[]; }
+
 export interface TimeResumo { id: number; nome: string; escudoUrl: string | null; }
 
 export interface Partida {
@@ -42,6 +96,7 @@ export interface Partida {
   rodada: number;
   fase: string | null;
   ordemFase: number | null;
+  legOrdem: number | null;
   status: StatusPartida;
   dataPartida: string | null;
   local: string | null;
@@ -49,13 +104,73 @@ export interface Partida {
   visitante: TimeResumo | null;
   golsMandante: number | null;
   golsVisitante: number | null;
+  prorrogacao: boolean;
+  golsMandanteProrr: number | null;
+  golsVisitanteProrr: number | null;
+  penaltisMandante: number | null;
+  penaltisVisitante: number | null;
 }
 
 export interface Rodada { titulo: string; partidas: Partida[]; }
 
-export interface GolEvento { id: number; timeId: number; jogadorId: number | null; jogadorNome: string | null; minuto: number | null; }
-export interface CartaoEvento { id: number; timeId: number; jogadorId: number | null; jogadorNome: string | null; tipo: TipoCartao; minuto: number | null; }
-export interface PartidaDetalhe { partida: Partida; gols: GolEvento[]; cartoes: CartaoEvento[]; }
+export interface GolEvento {
+  id: number; timeId: number; jogadorId: number | null;
+  jogadorNome: string | null; jogadorApelido?: string | null;
+  minuto: number | null; tempoSegundos?: number | null;
+  tipo?: TipoGol;
+}
+export interface CartaoEvento {
+  id: number; timeId: number; jogadorId: number | null;
+  jogadorNome: string | null; jogadorApelido?: string | null;
+  tipo: TipoCartao; minuto: number | null;
+  tempoSegundos?: number | null;
+  motivoCodigo?: string | null; motivoDescricao?: string | null;
+}
+export interface Substituicao {
+  id: number; timeId: number;
+  periodo: Periodo; tempoSegundos: number | null;
+  entrou: { id: number; numero: number | null; nome: string };
+  saiu: { id: number; numero: number | null; nome: string };
+}
+export interface EscalacaoEntry {
+  jogadorId: number; tipo: TipoEscalacao; timeId: number;
+  jogador: Jogador;
+}
+export interface Arbitragem {
+  juiz: Usuario | null;
+  assistente1: Usuario | null;
+  assistente2: Usuario | null;
+  quartoArbitro: Usuario | null;
+  var: Usuario | null;
+  avar: Usuario | null;
+  avar2: Usuario | null;
+  observadorVar: Usuario | null;
+  auxiliares: Usuario[];
+}
+export interface Cronologia {
+  entradaMandante: string | null; entradaVisitante: string | null;
+  inicio1T: string | null; termino1T: string | null; acrescimo1T: number | null;
+  inicio2T: string | null; termino2T: string | null; acrescimo2T: number | null;
+  placar1TMandante: number | null; placar1TVisitante: number | null;
+}
+export interface ObservacoesPartida {
+  ocorrencias: string | null;
+  motivoAtraso: string | null;
+  observacoesEventuais: string | null;
+  relatorioAssistente: string | null;
+}
+export interface StatPartida { id: number; timeId: number; chave: ChaveStat; valor: number; }
+export interface PartidaDetalhe {
+  partida: Partida;
+  arbitragem?: Arbitragem;
+  cronologia?: Cronologia;
+  observacoes?: ObservacoesPartida;
+  gols: GolEvento[];
+  cartoes: CartaoEvento[];
+  escalacao?: EscalacaoEntry[];
+  substituicoes?: Substituicao[];
+  stats?: StatPartida[];
+}
 
 export interface ClassificacaoLinha {
   posicao: number; timeId: number; nome: string; escudoUrl: string | null;
@@ -63,7 +178,15 @@ export interface ClassificacaoLinha {
   golsPro: number; golsContra: number; saldo: number;
 }
 
-export interface Artilheiro { jogadorId: number; jogadorNome: string; timeId: number; timeNome: string; escudoUrl: string | null; gols: number; }
+export interface ClassificacaoGrupo {
+  grupoId: number; nome: string; linhas: ClassificacaoLinha[];
+}
+
+export interface Artilheiro {
+  jogadorId: number; jogadorNome: string;
+  timeId: number; timeNome: string;
+  escudoUrl: string | null; gols: number;
+}
 
 export interface CampeonatoPublico {
   id: number; nome: string; formato: Formato; status: StatusCampeonato;
@@ -76,6 +199,8 @@ export interface CampeonatoResumoPublico {
   id: number; nome: string; formato: Formato; status: StatusCampeonato;
   dataInicio: string | null; dataFim: string | null; qtdTimes: number;
 }
+
+export interface ComissaoTecnica { id: number; timeId: number; nome: string; funcao: FuncaoComissao; }
 
 function tokenExpiraEmMs(token: string): number | null {
   try {
@@ -91,7 +216,6 @@ function tokenExpiraEmMs(token: string): number | null {
 function tokenValido(token: string | null): token is string {
   if (!token) return false;
   const exp = tokenExpiraEmMs(token);
-
   return exp === null || exp > Date.now();
 }
 
@@ -103,11 +227,7 @@ export const auth = {
   getUser: (): Usuario | null => {
     const raw = localStorage.getItem(USER_KEY);
     if (!raw) return null;
-    try {
-      return JSON.parse(raw) as Usuario;
-    } catch {
-      return null;
-    }
+    try { return JSON.parse(raw) as Usuario; } catch { return null; }
   },
   save: (r: AuthResponse) => {
     localStorage.setItem(TOKEN_KEY, r.token);
@@ -117,7 +237,6 @@ export const auth = {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
   },
-
   isLogged: () => tokenValido(localStorage.getItem(TOKEN_KEY)),
 };
 
@@ -145,7 +264,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     try {
       const body = await res.json();
       message = body.message || message;
-    } catch {  }
+    } catch {
+      /* body não é JSON ou vazio */
+    }
     throw new ApiError(res.status, message);
   }
   if (res.status === 204) return undefined as T;
@@ -170,17 +291,20 @@ export const api = {
   excluirCampeonato: (id: number) =>
     request<void>(`/campeonatos/${id}`, { method: 'DELETE' }),
 
+  listarGrupos: (campeonatoId: number) =>
+    request<Grupo[]>(`/campeonatos/${campeonatoId}/grupos`),
+
   listarTimes: (campeonatoId: number) => request<Time[]>(`/campeonatos/${campeonatoId}/times`),
-  criarTime: (campeonatoId: number, data: { nome: string; cidade?: string; escudoUrl?: string }) =>
+  criarTime: (campeonatoId: number, data: { nome: string; cidade?: string; escudoUrl?: string; grupoId?: number | null }) =>
     request<Time>(`/campeonatos/${campeonatoId}/times`, { method: 'POST', body: body(data) }),
-  atualizarTime: (timeId: number, data: { nome: string; cidade?: string; escudoUrl?: string }) =>
+  atualizarTime: (timeId: number, data: { nome: string; cidade?: string; escudoUrl?: string; grupoId?: number | null }) =>
     request<Time>(`/times/${timeId}`, { method: 'PUT', body: body(data) }),
   excluirTime: (timeId: number) => request<void>(`/times/${timeId}`, { method: 'DELETE' }),
 
   listarJogadores: (timeId: number) => request<Jogador[]>(`/times/${timeId}/jogadores`),
-  criarJogador: (timeId: number, data: { numero?: number; nome: string; posicao?: Posicao }) =>
+  criarJogador: (timeId: number, data: Partial<Jogador>) =>
     request<Jogador>(`/times/${timeId}/jogadores`, { method: 'POST', body: body(data) }),
-  atualizarJogador: (jogadorId: number, data: { numero?: number; nome: string; posicao?: Posicao }) =>
+  atualizarJogador: (jogadorId: number, data: Partial<Jogador>) =>
     request<Jogador>(`/jogadores/${jogadorId}`, { method: 'PUT', body: body(data) }),
   excluirJogador: (jogadorId: number) => request<void>(`/jogadores/${jogadorId}`, { method: 'DELETE' }),
 
@@ -190,13 +314,71 @@ export const api = {
   obterPartida: (partidaId: number) => request<PartidaDetalhe>(`/partidas/${partidaId}`),
   registrarResultado: (partidaId: number, data: {
     golsMandante: number; golsVisitante: number;
+    prorrogacao?: boolean;
+    golsMandanteProrr?: number | null;
+    golsVisitanteProrr?: number | null;
+    penaltisMandante?: number | null;
+    penaltisVisitante?: number | null;
     gols?: { timeId: number; jogadorId?: number; minuto?: number }[];
     cartoes?: { timeId: number; jogadorId?: number; tipo: TipoCartao; minuto?: number }[];
   }) => request<PartidaDetalhe>(`/partidas/${partidaId}/resultado`, { method: 'PUT', body: body(data) }),
 
+  listarComissao: (timeId: number) => request<ComissaoTecnica[]>(`/times/${timeId}/comissao`),
+  criarComissao: (timeId: number, data: { nome: string; funcao: FuncaoComissao }) =>
+    request<ComissaoTecnica>(`/times/${timeId}/comissao`, { method: 'POST', body: body(data) }),
+  atualizarComissao: (id: number, data: { nome: string; funcao: FuncaoComissao }) =>
+    request<ComissaoTecnica>(`/comissao/${id}`, { method: 'PUT', body: body(data) }),
+  excluirComissao: (id: number) => request<void>(`/comissao/${id}`, { method: 'DELETE' }),
+
+  // Súmula granular
+  criarGol: (partidaId: number, data: { timeId: number; jogadorId?: number | null; minuto?: number | null; tempoSegundos?: number | null; tipo?: TipoGol }) =>
+    request<GolEvento>(`/partidas/${partidaId}/gols`, { method: 'POST', body: body(data) }),
+  excluirGol: (id: number) => request<void>(`/gols/${id}`, { method: 'DELETE' }),
+
+  criarCartao: (partidaId: number, data: { timeId: number; jogadorId?: number | null; tipo: TipoCartao; minuto?: number | null; tempoSegundos?: number | null; motivoCodigo?: string | null; motivoDescricao?: string | null }) =>
+    request<CartaoEvento>(`/partidas/${partidaId}/cartoes`, { method: 'POST', body: body(data) }),
+  excluirCartao: (id: number) => request<void>(`/cartoes/${id}`, { method: 'DELETE' }),
+
+  criarSubstituicao: (partidaId: number, data: { timeId: number; periodo: Periodo; entrouJogadorId: number; saiuJogadorId: number; tempoSegundos?: number | null }) =>
+    request<Substituicao>(`/partidas/${partidaId}/substituicoes`, { method: 'POST', body: body(data) }),
+  excluirSubstituicao: (id: number) => request<void>(`/substituicoes/${id}`, { method: 'DELETE' }),
+
+  salvarEscalacao: (partidaId: number, data: { titulares: number[]; reservas: number[] }) =>
+    request<EscalacaoEntry[]>(`/partidas/${partidaId}/escalacao`, { method: 'PUT', body: body(data) }),
+
+  salvarCronologia: (partidaId: number, data: Partial<Cronologia>) =>
+    request<unknown>(`/partidas/${partidaId}/cronologia`, { method: 'PUT', body: body(data) }),
+
+  salvarObservacoes: (partidaId: number, data: Partial<ObservacoesPartida>) =>
+    request<unknown>(`/partidas/${partidaId}/observacoes`, { method: 'PUT', body: body(data) }),
+
+  salvarArbitragem: (partidaId: number, data: {
+    juizEmail?: string | null; assistente1Email?: string | null; assistente2Email?: string | null;
+    quartoArbitroEmail?: string | null; varEmail?: string | null; avarEmail?: string | null;
+    avar2Email?: string | null; observadorVarEmail?: string | null;
+  }) => request<unknown>(`/partidas/${partidaId}/arbitragem`, { method: 'PUT', body: body(data) }),
+
+  adicionarAuxiliar: (partidaId: number, email: string) =>
+    request<{ partidaId: number; usuarioId: number; email: string }>(
+      `/partidas/${partidaId}/auxiliares`, { method: 'POST', body: body({ email }) }),
+  removerAuxiliar: (partidaId: number, usuarioId: number) =>
+    request<void>(`/partidas/${partidaId}/auxiliares/${usuarioId}`, { method: 'DELETE' }),
+
+  salvarStats: (partidaId: number, stats: { timeId: number; chave: ChaveStat; valor: number }[]) =>
+    request<StatPartida[]>(`/partidas/${partidaId}/stats`, { method: 'PUT', body: body({ stats }) }),
+
+  fecharPlacar: (partidaId: number, data: {
+    golsMandante: number; golsVisitante: number;
+    prorrogacao?: boolean;
+    golsMandanteProrr?: number | null; golsVisitanteProrr?: number | null;
+    penaltisMandante?: number | null; penaltisVisitante?: number | null;
+  }) => request<PartidaDetalhe>(`/partidas/${partidaId}/placar`, { method: 'PUT', body: body(data) }),
+
   publicoListar: () => request<CampeonatoResumoPublico[]>('/public/campeonatos'),
   publicoCampeonato: (id: number) => request<CampeonatoPublico>(`/public/campeonatos/${id}`),
   publicoClassificacao: (id: number) => request<ClassificacaoLinha[]>(`/public/campeonatos/${id}/classificacao`),
+  publicoClassificacaoGrupos: (id: number) =>
+    request<ClassificacaoGrupo[]>(`/public/campeonatos/${id}/classificacao-grupos`),
   publicoArtilharia: (id: number) => request<Artilheiro[]>(`/public/campeonatos/${id}/artilharia`),
   publicoRodadas: (id: number) => request<Rodada[]>(`/public/campeonatos/${id}/rodadas`),
 };

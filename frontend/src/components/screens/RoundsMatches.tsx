@@ -9,8 +9,8 @@ import { api, ApiError, Partida, Rodada, StatusPartida } from '../../lib/api';
 import { campeonatoAtivo, partidaAtiva } from '../../lib/session';
 
 const statusStyle: Record<StatusPartida, string> = {
-  CONCLUIDA: 'bg-green-100 text-green-700',
-  AGENDADA: 'bg-gray-100 text-gray-500',
+  CONCLUIDA: 'bg-primary/15 text-primary',
+  AGENDADA: 'bg-muted text-muted-foreground',
   EM_ANDAMENTO: 'bg-yellow-100 text-yellow-700',
 };
 
@@ -76,9 +76,9 @@ export function RoundsMatches() {
       <div className="p-8 pb-24">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-gray-900 font-bold">Rodadas e Partidas</h1>
-            <p className="text-gray-500 text-sm mt-0.5">
-              <span className="text-green-600 font-medium">{ativo?.nome}</span>
+            <h1 className="text-foreground font-bold">Rodadas e Partidas</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">
+              <span className="text-primary font-medium">{ativo?.nome}</span>
               {' '}· {rodadas.length} rodadas
             </p>
           </div>
@@ -89,15 +89,15 @@ export function RoundsMatches() {
         </div>
 
         {erro && (
-          <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600 mb-6">{erro}</div>
+          <div className="rounded-md bg-destructive/10 border border-red-200 px-3 py-2 text-sm text-destructive mb-6">{erro}</div>
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-gray-400 text-sm">
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
             <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
           </div>
         ) : rodadas.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 py-16 text-center text-sm text-gray-500">
+          <div className="bg-card rounded-xl border border-border py-16 text-center text-sm text-muted-foreground">
             Nenhuma rodada gerada. Cadastre os times e clique em <span className="font-medium">Gerar Rodadas</span>.
           </div>
         ) : (
@@ -105,18 +105,18 @@ export function RoundsMatches() {
             {rodadas.map((round, ri) => (
               <div key={ri}>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="px-3 py-1 rounded-full text-sm text-white bg-green-600 font-semibold">
+                  <div className="px-3 py-1 rounded-full text-sm text-white bg-primary font-semibold">
                     {round.titulo}
                   </div>
-                  <div className="h-px flex-1 bg-gray-200" />
-                  <span className="text-xs text-gray-400">{round.partidas.length} partidas</span>
+                  <div className="h-px flex-1 bg-muted" />
+                  <span className="text-xs text-muted-foreground">{round.partidas.length} partidas</span>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
                   {round.partidas.map(match => {
                     const data = formatarData(match.dataPartida);
                     return (
-                      <div key={match.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-sm transition-shadow">
+                      <div key={match.id} className="bg-card rounded-xl border border-border p-5 hover:shadow-sm transition-shadow">
                         <div className="flex items-center gap-4">
                           <Badge variant="secondary" className={`text-xs shrink-0 ${statusStyle[match.status]}`}>
                             {statusLabel[match.status]}
@@ -124,7 +124,7 @@ export function RoundsMatches() {
 
                           <div className="flex-1 flex items-center justify-center gap-6">
                             <div className="flex items-center gap-3 flex-1 justify-end">
-                              <span className="text-sm text-gray-900 text-right font-medium">
+                              <span className="text-sm text-foreground text-right font-medium">
                                 {match.mandante?.nome ?? 'A definir'}
                               </span>
                               <TeamShield size="sm" />
@@ -133,33 +133,33 @@ export function RoundsMatches() {
                             <div className="flex items-center gap-2 shrink-0">
                               {match.status === 'CONCLUIDA' && match.golsMandante != null ? (
                                 <div className="flex items-center gap-1.5">
-                                  <span className="w-9 h-9 rounded-lg bg-gray-900 text-white flex items-center justify-center font-bold text-lg">
+                                  <span className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center font-bold text-lg">
                                     {match.golsMandante}
                                   </span>
-                                  <span className="text-gray-400 text-xs">×</span>
-                                  <span className="w-9 h-9 rounded-lg bg-gray-900 text-white flex items-center justify-center font-bold text-lg">
+                                  <span className="text-muted-foreground text-xs">×</span>
+                                  <span className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center font-bold text-lg">
                                     {match.golsVisitante}
                                   </span>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-1.5">
-                                  <span className="w-9 h-9 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-300 text-lg font-bold">–</span>
-                                  <span className="text-gray-300 text-xs">×</span>
-                                  <span className="w-9 h-9 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-300 text-lg font-bold">–</span>
+                                  <span className="w-9 h-9 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground/60 text-lg font-bold">–</span>
+                                  <span className="text-muted-foreground/60 text-xs">×</span>
+                                  <span className="w-9 h-9 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-muted-foreground/60 text-lg font-bold">–</span>
                                 </div>
                               )}
                             </div>
 
                             <div className="flex items-center gap-3 flex-1">
                               <TeamShield size="sm" />
-                              <span className="text-sm text-gray-900 font-medium">
+                              <span className="text-sm text-foreground font-medium">
                                 {match.visitante?.nome ?? (match.status === 'CONCLUIDA' ? 'Bye' : 'A definir')}
                               </span>
                             </div>
                           </div>
 
                           <div className="flex flex-col items-end gap-2 shrink-0">
-                            <div className="flex items-center gap-3 text-xs text-gray-400">
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
                               {data && (
                                 <span className="flex items-center gap-1">
                                   <Calendar className="w-3 h-3" />
@@ -176,7 +176,7 @@ export function RoundsMatches() {
                             {match.mandante && match.visitante && (
                               <button
                                 onClick={() => registrarResultado(match)}
-                                className="text-xs px-3 py-1.5 rounded-md text-white flex items-center gap-1 transition-colors bg-green-600 hover:bg-green-700"
+                                className="text-xs px-3 py-1.5 rounded-md text-white flex items-center gap-1 transition-colors bg-primary hover:bg-primary/90"
                               >
                                 {match.status === 'CONCLUIDA' ? 'Editar resultado' : 'Registrar resultado'}
                                 <ChevronRight className="w-3 h-3" />
