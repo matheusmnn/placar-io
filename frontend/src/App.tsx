@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router';
 import { AuthProvider } from './lib/useAuth';
+import { ThemeProvider } from './lib/theme';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { PublicHome } from './components/screens/PublicHome';
 import { Login } from './components/screens/Login';
@@ -18,6 +19,7 @@ function Protected({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <ThemeProvider>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -34,5 +36,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ThemeProvider>
   );
 }

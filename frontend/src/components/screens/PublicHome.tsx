@@ -8,12 +8,18 @@ import { Logo } from '../Logo';
 import { api, CampeonatoResumoPublico, Formato, StatusCampeonato } from '../../lib/api';
 import { useAuth } from '../../lib/useAuth';
 
-const formatoLabel: Record<Formato, string> = { PONTOS_CORRIDOS: 'Pontos Corridos', MATA_MATA: 'Mata-Mata' };
+const formatoLabel: Record<Formato, string> = {
+  PONTOS_CORRIDOS: 'Pontos corridos',
+  MATA_MATA: 'Mata-mata',
+  GRUPOS: 'Grupos',
+  GRUPOS_MATA_MATA: 'Grupos + mata-mata',
+  PONTOS_CORRIDOS_MATA_MATA: 'Liga + playoff',
+};
 const statusLabel: Record<StatusCampeonato, string> = { EM_ANDAMENTO: 'Em andamento', ENCERRADO: 'Encerrado', NAO_INICIADO: 'Não iniciado' };
 const statusStyle: Record<StatusCampeonato, string> = {
-  EM_ANDAMENTO: 'bg-green-100 text-green-700',
+  EM_ANDAMENTO: 'bg-primary/15 text-primary',
   NAO_INICIADO: 'bg-blue-100 text-blue-700',
-  ENCERRADO: 'bg-gray-100 text-gray-500',
+  ENCERRADO: 'bg-muted text-muted-foreground',
 };
 
 function formatarData(iso: string | null): string | null {
@@ -43,8 +49,8 @@ export function PublicHome() {
   const filtrados = campeonatos.filter(c => semAcento(c.nome).includes(semAcento(busca.trim())));
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+    <div className="min-h-screen bg-background">
+      <header className="bg-card border-b border-border sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
           <button onClick={() => navigate('/')} className="hover:opacity-80 transition-opacity">
             <Logo size="md" />
@@ -53,7 +59,7 @@ export function PublicHome() {
             {isLogged ? (
               <Button
                 size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                className="bg-primary hover:bg-primary/90 text-white gap-2"
                 onClick={() => navigate('/dashboard')}
               >
                 <LayoutDashboard className="w-4 h-4" />
@@ -66,7 +72,7 @@ export function PublicHome() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-primary hover:bg-primary/90 text-white"
                   onClick={() => navigate('/cadastro')}
                 >
                   Cadastrar
@@ -77,12 +83,12 @@ export function PublicHome() {
         </div>
       </header>
 
-      <section className="bg-white border-b border-gray-100 py-12">
+      <section className="bg-card border-b border-border py-12">
         <div className="max-w-7xl mx-auto px-8">
-          <h1 className="text-gray-900 mb-3 text-[2.25rem] font-bold leading-[1.2]">
+          <h1 className="text-foreground mb-3 text-[2.25rem] font-bold leading-[1.2]">
             Campeonatos
           </h1>
-          <p className="text-gray-500 text-[1.0625rem]">
+          <p className="text-muted-foreground text-[1.0625rem]">
             Acompanhe resultados, classificação e artilharia dos campeonatos de futebol amador.
           </p>
         </div>
@@ -90,55 +96,55 @@ export function PublicHome() {
 
       <section className="max-w-7xl mx-auto px-8 py-10 pb-24">
         <div className="flex items-center justify-between mb-6">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {loading ? 'Carregando...' : `${filtrados.length} campeonato${filtrados.length === 1 ? '' : 's'}`}
           </p>
           <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               value={busca}
               onChange={e => setBusca(e.target.value)}
               placeholder="Buscar campeonato..."
-              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:border-green-600"
+              className="w-full pl-9 pr-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:border-green-600"
             />
           </div>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-20 text-gray-400 text-sm">
+          <div className="flex items-center justify-center gap-2 py-20 text-muted-foreground text-sm">
             <Loader2 className="w-4 h-4 animate-spin" /> Carregando campeonatos...
           </div>
         ) : campeonatos.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 py-16 px-8 text-center">
-            <Trophy className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-700 font-semibold">Nenhum campeonato ainda</p>
-            <p className="text-gray-500 text-sm mt-1">
+          <div className="bg-card rounded-xl border border-border py-16 px-8 text-center">
+            <Trophy className="w-10 h-10 text-muted-foreground/60 mx-auto mb-3" />
+            <p className="text-foreground font-semibold">Nenhum campeonato ainda</p>
+            <p className="text-muted-foreground text-sm mt-1">
               {isLogged
                 ? 'Crie o primeiro campeonato no seu painel.'
                 : 'Crie uma conta para organizar o seu primeiro campeonato.'}
             </p>
             <Button
-              className="mt-5 bg-green-600 hover:bg-green-700 text-white"
+              className="mt-5 bg-primary hover:bg-primary/90 text-white"
               onClick={() => navigate(isLogged ? '/dashboard/novo' : '/cadastro')}
             >
               {isLogged ? 'Criar campeonato' : 'Criar conta'}
             </Button>
           </div>
         ) : filtrados.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 py-16 px-8 text-center">
-            <Search className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-700 font-semibold">Nenhum campeonato encontrado</p>
-            <p className="text-gray-500 text-sm mt-1">Nada corresponde a “{busca.trim()}”.</p>
+          <div className="bg-card rounded-xl border border-border py-16 px-8 text-center">
+            <Search className="w-10 h-10 text-muted-foreground/60 mx-auto mb-3" />
+            <p className="text-foreground font-semibold">Nenhum campeonato encontrado</p>
+            <p className="text-muted-foreground text-sm mt-1">Nada corresponde a “{busca.trim()}”.</p>
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-6">
             {filtrados.map(champ => (
-              <Card key={champ.id} className="overflow-hidden hover:shadow-md transition-shadow border-gray-200">
-                <div className="h-1.5 bg-green-600" />
+              <Card key={champ.id} className="overflow-hidden hover:shadow-md transition-shadow border-border">
+                <div className="h-1.5 bg-primary" />
                 <CardHeader className="pb-2 pt-5">
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-gray-900 leading-snug text-base font-semibold">
+                    <CardTitle className="text-foreground leading-snug text-base font-semibold">
                       {champ.nome}
                     </CardTitle>
                     <Badge variant="secondary" className={`shrink-0 text-xs ${statusStyle[champ.status]}`}>
@@ -148,17 +154,17 @@ export function PublicHome() {
                 </CardHeader>
 
                 <CardContent className="pb-4 space-y-2.5">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Trophy className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Trophy className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span>{formatoLabel[champ.formato]}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Users className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span>{champ.qtdTimes} times</span>
                   </div>
                   {(champ.dataInicio || champ.dataFim) && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                       <span>
                         {formatarData(champ.dataInicio) ?? '—'}
                         {champ.dataFim ? ` — ${formatarData(champ.dataFim)}` : ''}
@@ -167,11 +173,11 @@ export function PublicHome() {
                   )}
                 </CardContent>
 
-                <CardFooter className="border-t border-gray-100 pt-4">
+                <CardFooter className="border-t border-border pt-4">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full text-green-700 border-green-200 hover:bg-green-50"
+                    className="w-full text-primary border-green-200 hover:bg-primary/10"
                     onClick={() => navigate(`/campeonato/${champ.id}`)}
                   >
                     Ver detalhes
@@ -184,10 +190,10 @@ export function PublicHome() {
         )}
       </section>
 
-      <footer className="border-t border-gray-200 bg-white py-6 mt-8">
+      <footer className="border-t border-border bg-card py-6 mt-8">
         <div className="max-w-7xl mx-auto px-8 flex items-center justify-between">
           <Logo size="sm" />
-          <p className="text-xs text-gray-400">© Placar.io — Gestão de campeonatos amadores</p>
+          <p className="text-xs text-muted-foreground">© Placar.io — Gestão de campeonatos amadores</p>
         </div>
       </footer>
     </div>
