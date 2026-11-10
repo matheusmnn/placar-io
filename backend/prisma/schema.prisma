@@ -108,6 +108,10 @@ model Campeonato {
   avancamPorGrupo    Int?
   criteriosDesempate Json?
   playoff            Json?
+  faixasTabela       Json?
+  campeonatoVinculadoId Int?
+  campeonatoVinculado   Campeonato?  @relation("CampeonatoVinculo", fields: [campeonatoVinculadoId], references: [id], onDelete: SetNull)
+  vinculados            Campeonato[] @relation("CampeonatoVinculo")
   dataInicio    DateTime?
   dataFim       DateTime?
   descricao     String?

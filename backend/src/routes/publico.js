@@ -37,7 +37,14 @@ publicoRouter.get(
   '/campeonatos/:id',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const c = await getCamp(id);
+    const c = await prisma.campeonato.findUnique({
+      where: { id },
+      include: {
+        campeonatoVinculado: { select: { id: true, nome: true } },
+        vinculados: { select: { id: true, nome: true }, orderBy: { nome: 'asc' } },
+      },
+    });
+    if (!c) throw notFound('Campeonato não encontrado');
     const partidas = await prisma.partida.findMany({ where: { campeonatoId: id } });
     const total = partidas.length;
     const jogadas = partidas.filter((p) => p.status === 'CONCLUIDA').length;
@@ -54,6 +61,9 @@ publicoRouter.get(
       status: c.status,
       logoUrl: c.logoUrl,
       descricao: c.descricao,
+      faixasTabela: c.faixasTabela,
+      campeonatoVinculado: c.campeonatoVinculado,
+      vinculados: c.vinculados,
       qtdTimes,
       totalPartidas: total,
       partidasJogadas: jogadas,

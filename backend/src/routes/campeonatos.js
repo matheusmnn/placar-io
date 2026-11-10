@@ -17,6 +17,15 @@ const playoffSchema = z.object({
   desempate: z.enum(['PENALTIS', 'PRORROGACAO_PENALTIS']).optional(),
 });
 
+const faixaTabelaSchema = z
+  .object({
+    cor: z.string().min(1).max(40),
+    posInicio: z.number().int().min(1),
+    posFim: z.number().int().min(1),
+    legenda: z.string().max(200),
+  })
+  .refine((f) => f.posFim >= f.posInicio, { message: 'posFim deve ser >= posInicio' });
+
 const campeonatoSchema = z.object({
   nome: z.string().min(1).max(200),
   formato: z
@@ -30,6 +39,8 @@ const campeonatoSchema = z.object({
   avancamPorGrupo: z.number().int().min(1).max(10).nullable().optional(),
   criteriosDesempate: z.array(z.enum(CRITERIOS)).max(CRITERIOS.length).nullable().optional(),
   playoff: playoffSchema.nullable().optional(),
+  faixasTabela: z.array(faixaTabelaSchema).max(20).nullable().optional(),
+  campeonatoVinculadoId: z.number().int().positive().nullable().optional(),
   dataInicio: z.string().datetime().nullable().optional(),
   dataFim: z.string().datetime().nullable().optional(),
   descricao: z.string().nullable().optional(),
@@ -50,6 +61,8 @@ function toCampDto(c, qtdTimes) {
     avancamPorGrupo: c.avancamPorGrupo,
     criteriosDesempate: c.criteriosDesempate,
     playoff: c.playoff,
+    faixasTabela: c.faixasTabela,
+    campeonatoVinculadoId: c.campeonatoVinculadoId,
     dataInicio: c.dataInicio,
     dataFim: c.dataFim,
     descricao: c.descricao,
@@ -62,6 +75,14 @@ async function getOwned(usuarioId, id) {
   const c = await prisma.campeonato.findFirst({ where: { id, usuarioId } });
   if (!c) throw notFound('Campeonato não encontrado');
   return c;
+}
+
+async function resolverVinculo(usuarioId, vinculadoId, selfId) {
+  if (vinculadoId == null) return vinculadoId;
+  if (vinculadoId === selfId) throw notFound('Campeonato não pode se vincular a si mesmo');
+  const alvo = await prisma.campeonato.findFirst({ where: { id: vinculadoId, usuarioId } });
+  if (!alvo) throw notFound('Campeonato vinculado não encontrado');
+  return vinculadoId;
 }
 
 campeonatosRouter.use(authRequired);
@@ -102,6 +123,7 @@ campeonatosRouter.post(
     const formato = data.formato ?? 'PONTOS_CORRIDOS';
     const temGrupos = formato === 'GRUPOS' || formato === 'GRUPOS_MATA_MATA';
     const numGrupos = temGrupos ? (data.numGrupos ?? 2) : null;
+    const vinculadoId = await resolverVinculo(req.userId, data.campeonatoVinculadoId ?? null, null);
 
     const c = await prisma.campeonato.create({
       data: {
@@ -116,6 +138,8 @@ campeonatosRouter.post(
         avancamPorGrupo: temGrupos ? (data.avancamPorGrupo ?? 2) : null,
         criteriosDesempate: data.criteriosDesempate ?? undefined,
         playoff: data.playoff ?? undefined,
+        faixasTabela: data.faixasTabela ?? undefined,
+        campeonatoVinculadoId: vinculadoId,
         dataInicio: data.dataInicio ? new Date(data.dataInicio) : null,
         dataFim: data.dataFim ? new Date(data.dataFim) : null,
         descricao: data.descricao ?? null,
@@ -138,6 +162,10 @@ campeonatosRouter.put(
     const id = Number(req.params.id);
     await getOwned(req.userId, id);
     const data = campeonatoSchema.parse(req.body);
+    const vinculadoId =
+      data.campeonatoVinculadoId === undefined
+        ? undefined
+        : await resolverVinculo(req.userId, data.campeonatoVinculadoId, id);
     const c = await prisma.campeonato.update({
       where: { id },
       data: {
@@ -150,6 +178,8 @@ campeonatosRouter.put(
         avancamPorGrupo: data.avancamPorGrupo ?? undefined,
         criteriosDesempate: data.criteriosDesempate === undefined ? undefined : data.criteriosDesempate,
         playoff: data.playoff === undefined ? undefined : data.playoff,
+        faixasTabela: data.faixasTabela === undefined ? undefined : data.faixasTabela,
+        campeonatoVinculadoId: vinculadoId,
         dataInicio: data.dataInicio ? new Date(data.dataInicio) : null,
         dataFim: data.dataFim ? new Date(data.dataFim) : null,
         descricao: data.descricao ?? null,
