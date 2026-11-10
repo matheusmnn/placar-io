@@ -9,8 +9,11 @@ import { api, Campeonato, CampeonatosResponse, Formato, StatusCampeonato } from 
 import { campeonatoAtivo } from '../../lib/session';
 
 const formatoLabel: Record<Formato, string> = {
-  PONTOS_CORRIDOS: 'Pontos Corridos',
-  MATA_MATA: 'Mata-Mata',
+  PONTOS_CORRIDOS: 'Pontos corridos',
+  MATA_MATA: 'Mata-mata',
+  GRUPOS: 'Grupos',
+  GRUPOS_MATA_MATA: 'Grupos + mata-mata',
+  PONTOS_CORRIDOS_MATA_MATA: 'Liga + playoff',
 };
 
 const statusLabel: Record<StatusCampeonato, string> = {
@@ -20,8 +23,8 @@ const statusLabel: Record<StatusCampeonato, string> = {
 };
 
 const statusStyle: Record<StatusCampeonato, string> = {
-  EM_ANDAMENTO: 'bg-green-100 text-green-700',
-  ENCERRADO: 'bg-gray-100 text-gray-500',
+  EM_ANDAMENTO: 'bg-primary/15 text-primary',
+  ENCERRADO: 'bg-muted text-muted-foreground',
   NAO_INICIADO: 'bg-blue-100 text-blue-700',
 };
 
@@ -62,10 +65,10 @@ export function Dashboard() {
 
   const campeonatos = data?.campeonatos ?? [];
   const stats = [
-    { label: 'Total', value: data?.stats.total ?? 0, icon: Trophy, color: 'text-gray-700', bg: 'bg-gray-100' },
-    { label: 'Em andamento', value: data?.stats.emAndamento ?? 0, icon: TrendingUp, color: 'text-green-700', bg: 'bg-green-100' },
+    { label: 'Total', value: data?.stats.total ?? 0, icon: Trophy, color: 'text-foreground', bg: 'bg-muted' },
+    { label: 'Em andamento', value: data?.stats.emAndamento ?? 0, icon: TrendingUp, color: 'text-primary', bg: 'bg-primary/15' },
     { label: 'Não iniciados', value: data?.stats.naoIniciados ?? 0, icon: Clock, color: 'text-blue-700', bg: 'bg-blue-100' },
-    { label: 'Encerrados', value: data?.stats.encerrados ?? 0, icon: CheckCircle, color: 'text-gray-500', bg: 'bg-gray-100' },
+    { label: 'Encerrados', value: data?.stats.encerrados ?? 0, icon: CheckCircle, color: 'text-muted-foreground', bg: 'bg-muted' },
   ];
 
   return (
@@ -73,11 +76,11 @@ export function Dashboard() {
       <div className="p-8 pb-24">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-gray-900 font-bold">Meus Campeonatos</h1>
-            <p className="text-gray-500 text-sm mt-0.5">{campeonatos.length} campeonatos cadastrados</p>
+            <h1 className="text-foreground font-bold">Meus Campeonatos</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">{campeonatos.length} campeonatos cadastrados</p>
           </div>
           <Button
-            className="text-white gap-2 bg-green-600 hover:bg-green-700"
+            className="text-white gap-2 bg-primary hover:bg-primary/90"
             onClick={() => navigate('/dashboard/novo')}
           >
             <Plus className="w-4 h-4" />
@@ -89,12 +92,12 @@ export function Dashboard() {
           {stats.map((stat, i) => {
             const Icon = stat.icon;
             return (
-              <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
+              <div key={i} className="bg-card rounded-xl border border-border p-5 flex items-center gap-4">
                 <div className={`w-10 h-10 rounded-lg ${stat.bg} flex items-center justify-center shrink-0`}>
                   <Icon className={`w-5 h-5 ${stat.color}`} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">{stat.label}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
                   <p className={`mt-0.5 text-2xl font-bold leading-[1.2] ${stat.color}`}>{stat.value}</p>
                 </div>
               </div>
@@ -102,38 +105,38 @@ export function Dashboard() {
           })}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-gray-900 font-semibold">Lista de Campeonatos</h3>
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+            <h3 className="text-foreground font-semibold">Lista de Campeonatos</h3>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-16 text-gray-400 text-sm">
+            <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
               <Loader2 className="w-4 h-4 animate-spin" /> Carregando...
             </div>
           ) : erro ? (
-            <div className="py-16 text-center text-sm text-red-500">{erro}</div>
+            <div className="py-16 text-center text-sm text-destructive">{erro}</div>
           ) : campeonatos.length === 0 ? (
-            <div className="py-16 text-center text-sm text-gray-500">
+            <div className="py-16 text-center text-sm text-muted-foreground">
               Você ainda não tem campeonatos. Clique em <span className="font-medium">Novo Campeonato</span> para começar.
             </div>
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="bg-gray-50/80 hover:bg-gray-50/80">
-                  <TableHead className="text-gray-500 text-xs uppercase tracking-wide font-semibold">Nome</TableHead>
-                  <TableHead className="text-gray-500 text-xs uppercase tracking-wide font-semibold">Formato</TableHead>
-                  <TableHead className="text-gray-500 text-xs uppercase tracking-wide font-semibold">Times</TableHead>
-                  <TableHead className="text-gray-500 text-xs uppercase tracking-wide font-semibold">Status</TableHead>
-                  <TableHead className="text-gray-500 text-xs uppercase tracking-wide text-right font-semibold">Ações</TableHead>
+                <TableRow className="bg-background/80 hover:bg-background/80">
+                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wide font-semibold">Nome</TableHead>
+                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wide font-semibold">Formato</TableHead>
+                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wide font-semibold">Times</TableHead>
+                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wide font-semibold">Status</TableHead>
+                  <TableHead className="text-muted-foreground text-xs uppercase tracking-wide text-right font-semibold">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {campeonatos.map(champ => (
-                  <TableRow key={champ.id} className="hover:bg-gray-50">
-                    <TableCell className="text-gray-900 font-medium">{champ.nome}</TableCell>
-                    <TableCell className="text-gray-600 text-sm">{formatoLabel[champ.formato]}</TableCell>
-                    <TableCell className="text-gray-600 text-sm">{champ.qtdTimes}</TableCell>
+                  <TableRow key={champ.id} className="hover:bg-background">
+                    <TableCell className="text-foreground font-medium">{champ.nome}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{formatoLabel[champ.formato]}</TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{champ.qtdTimes}</TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={`text-xs ${statusStyle[champ.status]}`}>
                         {statusLabel[champ.status]}
@@ -143,21 +146,21 @@ export function Dashboard() {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => navigate(`/campeonato/${champ.id}`)}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
                           title="Ver página pública"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => gerenciar(champ)}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                           title="Gerenciar (times, jogadores, rodadas)"
                         >
                           <Settings2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => excluir(champ)}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                           title="Excluir"
                         >
                           <Trash2 className="w-4 h-4" />
