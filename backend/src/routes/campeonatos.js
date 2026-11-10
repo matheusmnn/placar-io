@@ -93,9 +93,9 @@ campeonatosRouter.get(
     const lista = await prisma.campeonato.findMany({
       where: { usuarioId: req.userId },
       orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { times: true } } },
+      include: { _count: { select: { inscricoes: true } } },
     });
-    const campeonatos = lista.map((c) => toCampDto(c, c._count.times));
+    const campeonatos = lista.map((c) => toCampDto(c, c._count.inscricoes));
     const stats = {
       total: lista.length,
       emAndamento: lista.filter((c) => c.status === 'EM_ANDAMENTO').length,
@@ -111,7 +111,7 @@ campeonatosRouter.get(
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const c = await getOwned(req.userId, id);
-    const qtdTimes = await prisma.time.count({ where: { campeonatoId: id } });
+    const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
     res.json(toCampDto(c, qtdTimes));
   }),
 );
@@ -186,7 +186,7 @@ campeonatosRouter.put(
         logoUrl: data.logoUrl ?? null,
       },
     });
-    const qtdTimes = await prisma.time.count({ where: { campeonatoId: id } });
+    const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
     res.json(toCampDto(c, qtdTimes));
   }),
 );
@@ -201,49 +201,115 @@ campeonatosRouter.delete(
   }),
 );
 
-// times do campeonato
+const SECOES_SUMULA = [
+  'arbitragem', 'escalacao', 'cronologia', 'gols', 'cartoes', 'placar', 'observacoes',
+];
+const sumulaConfigSchema = z.object({
+  secoes: z.record(z.enum(SECOES_SUMULA), z.boolean()).default({}),
+  subsecoes: z.record(z.string().max(60), z.boolean()).default({}),
+  camposCustom: z
+    .array(
+      z.object({
+        id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, 'id inválido'),
+        label: z.string().min(1).max(60),
+        tipo: z.enum(['texto', 'numero', 'boolean']),
+      }),
+    )
+    .max(30)
+    .default([]),
+}).refine(
+  (c) => new Set(c.camposCustom.map((f) => f.id)).size === c.camposCustom.length,
+  { message: 'ids de campos custom devem ser únicos' },
+);
+
+function defaultSumulaConfig() {
+  return { secoes: {}, subsecoes: {}, camposCustom: [] };
+}
+
+campeonatosRouter.get(
+  '/:id/sumula-config',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const c = await getOwned(req.userId, id);
+    res.json(c.sumulaConfig ?? defaultSumulaConfig());
+  }),
+);
+
+campeonatosRouter.put(
+  '/:id/sumula-config',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await getOwned(req.userId, id);
+    const data = sumulaConfigSchema.parse(req.body);
+    const c = await prisma.campeonato.update({
+      where: { id },
+      data: { sumulaConfig: data },
+    });
+    res.json(c.sumulaConfig);
+  }),
+);
+
+// Times inscritos no campeonato (via InscricaoCampeonato).
 campeonatosRouter.get(
   '/:id/times',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     await getOwned(req.userId, id);
-    const times = await prisma.time.findMany({ where: { campeonatoId: id }, orderBy: { nome: 'asc' } });
-    res.json(times);
+    const inscr = await prisma.inscricaoCampeonato.findMany({
+      where: { campeonatoId: id },
+      include: { time: true },
+      orderBy: { time: { nome: 'asc' } },
+    });
+    res.json(inscr.map((i) => ({ ...i.time, grupoId: i.grupoId, inscricaoId: i.id })));
   }),
 );
 
-const timeSchema = z.object({
-  nome: z.string().min(1).max(120),
-  cidade: z.string().max(120).nullable().optional(),
-  escudoUrl: z.string().url().nullable().optional(),
+const inscricaoSchema = z.object({
+  timeId: z.number().int(),
   grupoId: z.number().int().nullable().optional(),
 });
-
-campeonatosRouter.post(
-  '/:id/times',
-  asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
-    await getOwned(req.userId, id);
-    const data = timeSchema.parse(req.body);
-    await assertGrupoDoCampeonato(id, data.grupoId);
-    const t = await prisma.time.create({
-      data: {
-        campeonatoId: id,
-        nome: data.nome.trim(),
-        cidade: data.cidade ?? null,
-        escudoUrl: data.escudoUrl ?? null,
-        grupoId: data.grupoId ?? null,
-      },
-    });
-    res.status(201).json(t);
-  }),
-);
 
 async function assertGrupoDoCampeonato(campeonatoId, grupoId) {
   if (grupoId == null) return;
   const g = await prisma.grupo.findUnique({ where: { id: grupoId } });
   if (!g || g.campeonatoId !== campeonatoId) throw notFound('Grupo não encontrado neste campeonato');
 }
+
+async function assertTimeDoUsuario(usuarioId, timeId) {
+  const t = await prisma.time.findUnique({ where: { id: timeId } });
+  if (!t || t.usuarioId !== usuarioId) throw notFound('Time não encontrado');
+  return t;
+}
+
+// Inscreve um time já cadastrado no campeonato.
+campeonatosRouter.post(
+  '/:id/inscricoes',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await getOwned(req.userId, id);
+    const data = inscricaoSchema.parse(req.body);
+    await assertTimeDoUsuario(req.userId, data.timeId);
+    await assertGrupoDoCampeonato(id, data.grupoId);
+    const i = await prisma.inscricaoCampeonato.upsert({
+      where: { campeonatoId_timeId: { campeonatoId: id, timeId: data.timeId } },
+      update: { grupoId: data.grupoId ?? null },
+      create: { campeonatoId: id, timeId: data.timeId, grupoId: data.grupoId ?? null },
+    });
+    res.status(201).json(i);
+  }),
+);
+
+// Desinscreve um time do campeonato.
+campeonatosRouter.delete(
+  '/:id/inscricoes/:timeId',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const timeId = Number(req.params.timeId);
+    await getOwned(req.userId, id);
+    await prisma.inscricaoCampeonato.deleteMany({ where: { campeonatoId: id, timeId } });
+    res.status(204).end();
+  }),
+);
 
 campeonatosRouter.get(
   '/:id/grupos',
@@ -253,9 +319,14 @@ campeonatosRouter.get(
     const grupos = await prisma.grupo.findMany({
       where: { campeonatoId: id },
       orderBy: { nome: 'asc' },
-      include: { times: { orderBy: { nome: 'asc' } } },
+      include: { inscricoes: { include: { time: true } } },
     });
-    res.json(grupos);
+    res.json(grupos.map((g) => ({
+      id: g.id,
+      campeonatoId: g.campeonatoId,
+      nome: g.nome,
+      times: g.inscricoes.map((i) => i.time).sort((a, b) => a.nome.localeCompare(b.nome)),
+    })));
   }),
 );
 
@@ -275,5 +346,72 @@ campeonatosRouter.get(
     const id = Number(req.params.id);
     await getOwned(req.userId, id);
     res.json(await listarRodadas(id));
+  }),
+);
+
+const arbitroSchema = z.object({
+  email: z.string().email().max(200),
+  nome: z.string().max(200).nullable().optional(),
+});
+
+async function resolverArbitroUsuario(email) {
+  const u = await prisma.usuario.findUnique({ where: { email } });
+  return u ? { usuarioId: u.id, nome: u.nome } : null;
+}
+
+campeonatosRouter.get(
+  '/:id/arbitros',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await getOwned(req.userId, id);
+    const lista = await prisma.arbitroCampeonato.findMany({
+      where: { campeonatoId: id },
+      orderBy: { id: 'asc' },
+    });
+    // tenta resolver usuarioId para pendentes
+    const pendentes = lista.filter((a) => !a.usuarioId);
+    for (const a of pendentes) {
+      const r = await resolverArbitroUsuario(a.email);
+      if (r) {
+        await prisma.arbitroCampeonato.update({ where: { id: a.id }, data: { usuarioId: r.usuarioId, nome: a.nome ?? r.nome } });
+        a.usuarioId = r.usuarioId;
+        a.nome = a.nome ?? r.nome;
+      }
+    }
+    res.json(lista.map((a) => ({ id: a.id, email: a.email, nome: a.nome, usuarioId: a.usuarioId, status: a.usuarioId ? 'ACEITO' : 'PENDENTE' })));
+  }),
+);
+
+campeonatosRouter.post(
+  '/:id/arbitros',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await getOwned(req.userId, id);
+    const data = arbitroSchema.parse(req.body);
+    const existente = await prisma.arbitroCampeonato.findUnique({
+      where: { campeonatoId_email: { campeonatoId: id, email: data.email } },
+    });
+    if (existente) return res.json({ id: existente.id, email: existente.email, nome: existente.nome, usuarioId: existente.usuarioId, status: existente.usuarioId ? 'ACEITO' : 'PENDENTE' });
+    const resolvido = await resolverArbitroUsuario(data.email);
+    const criado = await prisma.arbitroCampeonato.create({
+      data: {
+        campeonatoId: id,
+        email: data.email,
+        nome: data.nome ?? resolvido?.nome ?? null,
+        usuarioId: resolvido?.usuarioId ?? null,
+      },
+    });
+    res.status(201).json({ id: criado.id, email: criado.email, nome: criado.nome, usuarioId: criado.usuarioId, status: criado.usuarioId ? 'ACEITO' : 'PENDENTE' });
+  }),
+);
+
+campeonatosRouter.delete(
+  '/:id/arbitros/:arbitroId',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const arbitroId = Number(req.params.arbitroId);
+    await getOwned(req.userId, id);
+    await prisma.arbitroCampeonato.deleteMany({ where: { id: arbitroId, campeonatoId: id } });
+    res.status(204).end();
   }),
 );

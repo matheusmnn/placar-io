@@ -12,11 +12,13 @@ const FORMATOS_COM_GRUPOS = new Set(['GRUPOS', 'GRUPOS_MATA_MATA']);
 export async function gerarRodadas(campeonatoId) {
   const camp = await prisma.campeonato.findUnique({ where: { id: campeonatoId } });
   if (!camp) throw badRequest('Campeonato não encontrado');
-  const times = await prisma.time.findMany({
+  const inscricoes = await prisma.inscricaoCampeonato.findMany({
     where: { campeonatoId },
-    orderBy: { nome: 'asc' },
+    include: { time: true },
+    orderBy: { time: { nome: 'asc' } },
   });
-  if (times.length < 2) throw badRequest('Cadastre pelo menos 2 times antes de gerar as rodadas');
+  const times = inscricoes.map((i) => i.time);
+  if (times.length < 2) throw badRequest('Inscreva pelo menos 2 times antes de gerar as rodadas');
 
   await prisma.partida.deleteMany({ where: { campeonatoId } });
 
@@ -64,16 +66,20 @@ async function gerarRodadasGrupos(camp) {
   const grupos = await prisma.grupo.findMany({
     where: { campeonatoId: camp.id },
     orderBy: { nome: 'asc' },
-    include: { times: { orderBy: { nome: 'asc' } } },
+    include: { inscricoes: { include: { time: true } } },
   });
   if (grupos.length === 0) throw badRequest('Crie os grupos antes de gerar as rodadas');
-  for (const g of grupos) {
+  const gruposComTimes = grupos.map((g) => ({
+    ...g,
+    times: g.inscricoes.map((i) => i.time).sort((a, b) => a.nome.localeCompare(b.nome)),
+  }));
+  for (const g of gruposComTimes) {
     if (g.times.length < 2) throw badRequest(`Grupo ${g.nome} precisa de pelo menos 2 times`);
   }
-  if (camp.formato === 'GRUPOS_MATA_MATA' && grupos.length % 2 !== 0) {
+  if (camp.formato === 'GRUPOS_MATA_MATA' && gruposComTimes.length % 2 !== 0) {
     throw badRequest('GRUPOS_MATA_MATA exige número par de grupos');
   }
-  for (const g of grupos) {
+  for (const g of gruposComTimes) {
     await criarPontosCorridos(camp, g.times, g.id);
   }
 }
@@ -402,7 +408,8 @@ async function verificarAvancoPlayoff(camp) {
   if (partidasPC.length === 0) return;
   if (!partidasPC.every((p) => p.status === 'CONCLUIDA')) return;
 
-  const times = await prisma.time.findMany({ where: { campeonatoId: camp.id } });
+  const inscr = await prisma.inscricaoCampeonato.findMany({ where: { campeonatoId: camp.id }, include: { time: true } });
+  const times = inscr.map((i) => i.time);
   const classificacao = calcularClassificacao(
     times,
     partidasPC,
@@ -446,14 +453,15 @@ async function verificarAvancoGrupos(camp) {
   const grupos = await prisma.grupo.findMany({
     where: { campeonatoId: camp.id },
     orderBy: { nome: 'asc' },
-    include: { times: true },
+    include: { inscricoes: { include: { time: true } } },
   });
   const N = camp.avancamPorGrupo ?? 2;
   const classificacoes = [];
   for (const g of grupos) {
+    const times = g.inscricoes.map((i) => i.time);
     const partidas = partidasGrupo.filter((p) => p.grupoId === g.id);
     const linhas = calcularClassificacao(
-      g.times,
+      times,
       partidas,
       camp.pontosVitoria,
       camp.pontosEmpate,
@@ -489,8 +497,8 @@ export async function listarRodadas(campeonatoId) {
     where: { campeonatoId },
     orderBy: [{ rodada: 'asc' }, { ordemFase: 'asc' }, { legOrdem: 'asc' }, { id: 'asc' }],
     include: {
-      mandante: { select: { id: true, nome: true, escudoUrl: true } },
-      visitante: { select: { id: true, nome: true, escudoUrl: true } },
+      mandante: { select: { id: true, nome: true, escudoUrl: true, cor: true, abreviacao: true } },
+      visitante: { select: { id: true, nome: true, escudoUrl: true, cor: true, abreviacao: true } },
       grupo: { select: { id: true, nome: true } },
     },
   });
@@ -539,6 +547,10 @@ export function toPartidaDto(p) {
     status: p.status,
     dataPartida: p.dataPartida,
     local: p.local,
+    transmissao: p.transmissao ?? null,
+    camposArbitragemOcultos: p.camposArbitragemOcultos ?? [],
+    camposCustom: p.camposCustom ?? {},
+    campeonatoId: p.campeonatoId,
     mandante: p.mandante,
     visitante: p.visitante,
     golsMandante: p.golsMandante,
@@ -555,8 +567,8 @@ export async function detalhe(partidaId) {
   const p = await prisma.partida.findUnique({
     where: { id: partidaId },
     include: {
-      mandante: { select: { id: true, nome: true, escudoUrl: true } },
-      visitante: { select: { id: true, nome: true, escudoUrl: true } },
+      mandante: { select: { id: true, nome: true, escudoUrl: true, cor: true, abreviacao: true } },
+      visitante: { select: { id: true, nome: true, escudoUrl: true, cor: true, abreviacao: true } },
       juiz: { select: { id: true, nome: true, email: true } },
       auxiliares: { include: { usuario: { select: { id: true, nome: true, email: true } } } },
       gols: { include: { jogador: true }, orderBy: [{ tempoSegundos: 'asc' }, { minuto: 'asc' }, { id: 'asc' }] },
@@ -570,6 +582,7 @@ export async function detalhe(partidaId) {
         orderBy: [{ periodo: 'asc' }, { tempoSegundos: 'asc' }, { id: 'asc' }],
       },
       stats: true,
+      campeonato: { select: { id: true, sumulaConfig: true } },
     },
   });
   if (!p) throw badRequest('Partida não encontrada');
@@ -586,6 +599,7 @@ export async function detalhe(partidaId) {
 
   return {
     partida: toPartidaDto(p),
+    sumulaConfig: p.campeonato?.sumulaConfig ?? { secoes: {}, subsecoes: {}, camposCustom: [] },
     arbitragem: {
       juiz: p.juiz ?? null,
       assistente1: arbitrosExtras[p.assistente1Id] ?? null,

@@ -77,6 +77,8 @@ export function calcular(times, partidas, pontosVitoria, pontosEmpate, criterios
     timeId: l.time.id,
     nome: l.time.nome,
     escudoUrl: l.time.escudoUrl,
+    cor: l.time.cor ?? null,
+    abreviacao: l.time.abreviacao ?? null,
     pontos: l.pontos,
     jogos: l.jogos,
     vitorias: l.vitorias,

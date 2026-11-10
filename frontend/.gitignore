@@ -1,1 +1,4 @@
 tsconfig.tsbuildinfo
+
+frontend/dist/
+docs/superpowers/

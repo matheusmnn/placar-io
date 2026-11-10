@@ -89,6 +89,7 @@ model Usuario {
   senhaHash            String
   createdAt            DateTime          @default(now())
   campeonatos          Campeonato[]
+  times                Time[]
   partidasComoJuiz     Partida[]         @relation("JuizPartida")
   auxiliariasEm        PartidaAuxiliar[]
 }
@@ -109,6 +110,7 @@ model Campeonato {
   criteriosDesempate Json?
   playoff            Json?
   faixasTabela       Json?
+  sumulaConfig       Json?
   campeonatoVinculadoId Int?
   campeonatoVinculado   Campeonato?  @relation("CampeonatoVinculo", fields: [campeonatoVinculadoId], references: [id], onDelete: SetNull)
   vinculados            Campeonato[] @relation("CampeonatoVinculo")
@@ -117,21 +119,36 @@ model Campeonato {
   descricao     String?
   logoUrl       String?
   createdAt     DateTime         @default(now())
-  times         Time[]
+  inscricoes    InscricaoCampeonato[]
   partidas      Partida[]
   grupos        Grupo[]
+  arbitros      ArbitroCampeonato[]
+}
+
+model ArbitroCampeonato {
+  id           Int        @id @default(autoincrement())
+  campeonatoId Int
+  campeonato   Campeonato @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  email        String
+  nome         String?
+  usuarioId    Int?
+  createdAt    DateTime   @default(now())
+
+  @@unique([campeonatoId, email])
+  @@index([campeonatoId])
 }
 
 model Time {
   id              Int               @id @default(autoincrement())
-  campeonatoId    Int
-  campeonato      Campeonato        @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
-  grupoId         Int?
-  grupo           Grupo?            @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+  usuarioId       Int
+  usuario         Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   nome            String
   cidade          String?
   escudoUrl       String?
+  cor             String?
+  abreviacao      String?
   jogadores       Jogador[]
+  inscricoes      InscricaoCampeonato[]
   mandanteEm      Partida[]         @relation("Mandante")
   visitanteEm     Partida[]         @relation("Visitante")
   gols            Gol[]
@@ -139,6 +156,23 @@ model Time {
   comissao        ComissaoTecnica[]
   substituicoesEm Substituicao[]
   stats           StatPartida[]
+
+  @@index([usuarioId])
+}
+
+model InscricaoCampeonato {
+  id           Int        @id @default(autoincrement())
+  campeonatoId Int
+  campeonato   Campeonato @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  timeId       Int
+  time         Time       @relation(fields: [timeId], references: [id], onDelete: Cascade)
+  grupoId      Int?
+  grupo        Grupo?     @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+
+  @@unique([campeonatoId, timeId])
+  @@index([campeonatoId])
+  @@index([timeId])
 }
 
 model Grupo {
@@ -146,7 +180,7 @@ model Grupo {
   campeonatoId Int
   campeonato   Campeonato @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
   nome         String
-  times        Time[]
+  inscricoes   InscricaoCampeonato[]
   partidas     Partida[]
 
   @@unique([campeonatoId, nome])
@@ -202,6 +236,9 @@ model Partida {
   status          StatusPartida @default(AGENDADA)
   dataPartida     DateTime?
   local           String?
+  transmissao     String?
+  camposArbitragemOcultos Json?
+  camposCustom            Json?
 
   // Arbitragem (súmula CBF-style). Apenas juizId tem relação FK; os demais são
   // só IDs de Usuario validados no app. Ponytail: evita 7 relações redundantes.

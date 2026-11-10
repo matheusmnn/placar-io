@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, Loader2, Plus, Trash2, Save } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Loader2, Pencil, Plus, Trash2, Save, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { OrganizerLayout } from '../OrganizerLayout';
 import {
-  api, ApiError, CartaoEvento, ComissaoTecnica, EscalacaoEntry, FuncaoComissao,
-  GolEvento, Jogador, Partida, PartidaDetalhe, Periodo, StatPartida,
-  Substituicao, TimeResumo, TipoCartao, TipoGol, Cronologia, ObservacoesPartida, Arbitragem,
+  api, ApiError, ArbitroCampeonato, CampoCustom, CampoCustomValor, CartaoEvento, ComissaoTecnica,
+  EscalacaoEntry, FuncaoComissao, GolEvento, Jogador, Partida, PartidaDetalhe, Periodo, StatPartida,
+  Substituicao, SumulaConfig, SumulaSecao, TimeResumo, TipoCartao, TipoGol, Cronologia,
+  ObservacoesPartida, Arbitragem, subLigada,
 } from '../../lib/api';
-import { partidaAtiva } from '../../lib/session';
+import { campeonatoAtivo, partidaAtiva } from '../../lib/session';
 
 /* ----------------------------- helpers ---------------------------------- */
 
@@ -33,10 +34,26 @@ function CBFSection({ title, children, right }: { title: string; children: React
   return (
     <div className="bg-card rounded-lg border border-border overflow-hidden mb-4">
       <div className="px-4 py-2 bg-primary/90 text-primary-foreground flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wide">{title}</h3>
+        <h3 className="text-sm font-semibold">{title}</h3>
         {right}
       </div>
       <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+function AcoesSecao({ onSalvar, onExcluir, confirmLabel = 'esta seção' }: { onSalvar: () => void; onExcluir?: () => void; confirmLabel?: string }) {
+  return (
+    <div className="flex gap-3">
+      {onExcluir && (
+        <button
+          onClick={() => { if (confirm(`Limpar ${confirmLabel}? Essa ação apaga tudo que foi preenchido aqui.`)) onExcluir(); }}
+          className="text-xs underline text-primary-foreground/70 hover:text-primary-foreground"
+        >
+          Excluir
+        </button>
+      )}
+      <button onClick={onSalvar} className="text-xs underline font-semibold">Salvar</button>
     </div>
   );
 }
@@ -81,6 +98,7 @@ export function RegisterResult() {
   const [jogVisitante, setJogVisitante] = useState<Jogador[]>([]);
   const [comissaoMandante, setComissaoMandante] = useState<ComissaoTecnica[]>([]);
   const [comissaoVisitante, setComissaoVisitante] = useState<ComissaoTecnica[]>([]);
+  const [arbitros, setArbitros] = useState<ArbitroCampeonato[]>([]);
 
   useEffect(() => {
     if (!partidaId) { navigate('/dashboard/rodadas'); return; }
@@ -93,16 +111,19 @@ export function RegisterResult() {
     try {
       const d = await api.obterPartida(id);
       setDet(d);
-      const [jm, jv, cm, cv] = await Promise.all([
+      const campId = campeonatoAtivo.get()?.id;
+      const [jm, jv, cm, cv, ar] = await Promise.all([
         d.partida.mandante ? api.listarJogadores(d.partida.mandante.id) : Promise.resolve([]),
         d.partida.visitante ? api.listarJogadores(d.partida.visitante.id) : Promise.resolve([]),
         d.partida.mandante ? api.listarComissao(d.partida.mandante.id) : Promise.resolve([]),
         d.partida.visitante ? api.listarComissao(d.partida.visitante.id) : Promise.resolve([]),
+        campId ? api.listarArbitrosCampeonato(campId) : Promise.resolve([] as ArbitroCampeonato[]),
       ]);
       setJogMandante(jm);
       setJogVisitante(jv);
       setComissaoMandante(cm);
       setComissaoVisitante(cv);
+      setArbitros(ar);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível carregar a partida');
     } finally {
@@ -158,7 +179,7 @@ export function RegisterResult() {
           onClick={() => navigate('/dashboard/rodadas')}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors"
         >
-          <ChevronLeft className="w-4 h-4" /> Rodadas e Partidas
+          <ChevronLeft className="w-4 h-4" /> Rodadas & jogos
         </button>
 
         {erro && (
@@ -167,37 +188,43 @@ export function RegisterResult() {
           </div>
         )}
 
-        <HeaderSumula partida={partida} />
+        <HeaderSumula partida={partida} salvar={salvarEDepoisRecarregar} />
 
-        <ArbitragemSection
+        {secaoLigada('arbitragem', det.sumulaConfig) && <ArbitragemSection
           partidaId={partida.id}
+          partida={partida}
           arbitragem={det.arbitragem}
+          arbitros={arbitros}
           onSave={() => recarregar(partida.id)}
           salvando={salvando}
           setSalvando={setSalvando}
           setErro={setErro}
-        />
+          salvar={salvarEDepoisRecarregar}
+        />}
 
-        <CronologiaSection
+        {secaoLigada('cronologia', det.sumulaConfig) && <CronologiaSection
           partidaId={partida.id}
           cronologia={det.cronologia}
+          dataPartida={partida.dataPartida}
+          cfg={det.sumulaConfig}
           salvar={salvarEDepoisRecarregar}
-        />
+        />}
 
-        <EscalacaoSection
+        {secaoLigada('escalacao', det.sumulaConfig) && <EscalacaoSection
           partidaId={partida.id}
           mandante={mandante}
           visitante={visitante}
           jogMandante={jogMandante}
           jogVisitante={jogVisitante}
           escalacaoAtual={det.escalacao ?? []}
+          cfg={det.sumulaConfig}
           salvar={salvarEDepoisRecarregar}
-        />
+        />}
 
-        <ComissaoBlock mandanteNome={mandante.nome} visitanteNome={visitante.nome}
-          mandante={comissaoMandante} visitante={comissaoVisitante} />
+        {secaoLigada('escalacao', det.sumulaConfig) && subLigada(det.sumulaConfig, 'escalacao', 'comissao') && <ComissaoBlock mandanteNome={mandante.nome} visitanteNome={visitante.nome}
+          mandante={comissaoMandante} visitante={comissaoVisitante} />}
 
-        <GolsSection
+        {secaoLigada('gols', det.sumulaConfig) && <GolsSection
           partidaId={partida.id}
           mandante={mandante}
           visitante={visitante}
@@ -205,9 +232,9 @@ export function RegisterResult() {
           jogVisitante={jogVisitante}
           gols={det.gols}
           salvar={salvarEDepoisRecarregar}
-        />
+        />}
 
-        <CartoesSection
+        {secaoLigada('cartoes', det.sumulaConfig) && <CartoesSection
           partidaId={partida.id}
           mandante={mandante}
           visitante={visitante}
@@ -215,9 +242,9 @@ export function RegisterResult() {
           jogVisitante={jogVisitante}
           cartoes={det.cartoes}
           salvar={salvarEDepoisRecarregar}
-        />
+        />}
 
-        <SubstituicoesSection
+        {secaoLigada('escalacao', det.sumulaConfig) && subLigada(det.sumulaConfig, 'escalacao', 'substituicoes') && <SubstituicoesSection
           partidaId={partida.id}
           mandante={mandante}
           visitante={visitante}
@@ -225,7 +252,7 @@ export function RegisterResult() {
           jogVisitante={jogVisitante}
           substituicoes={det.substituicoes ?? []}
           salvar={salvarEDepoisRecarregar}
-        />
+        />}
 
         <StatsSection
           partidaId={partida.id}
@@ -237,50 +264,137 @@ export function RegisterResult() {
           salvar={salvarEDepoisRecarregar}
         />
 
-        <ObservacoesSection
+        {secaoLigada('observacoes', det.sumulaConfig) && <ObservacoesSection
           partidaId={partida.id}
           obs={det.observacoes}
+          cfg={det.sumulaConfig}
           salvar={salvarEDepoisRecarregar}
-        />
+        />}
 
-        <PlacarFinalSection
+        {det.sumulaConfig.camposCustom.length > 0 && <CamposCustomSection
+          partidaId={partida.id}
+          campos={det.sumulaConfig.camposCustom}
+          valores={partida.camposCustom}
+          salvar={salvarEDepoisRecarregar}
+        />}
+
+        {secaoLigada('placar', det.sumulaConfig) && <PlacarSection
           partida={partida}
+          cronologia={det.cronologia}
           salvando={salvando}
-          onSalvar={(data) =>
+          salvar1T={async ({ m, v }) => {
+            await withBusy(() => api.salvarCronologia(partida.id, {
+              placar1TMandante: m,
+              placar1TVisitante: v,
+            }));
+            await recarregar(partida.id);
+          }}
+          onSalvarFinal={(data) =>
             withBusy(async () => {
               await api.fecharPlacar(partida.id, data);
               navigate('/dashboard/rodadas');
             })
           }
-        />
+        />}
       </div>
     </OrganizerLayout>
   );
 }
 
+function secaoLigada(id: SumulaSecao, cfg: SumulaConfig | undefined): boolean {
+  return cfg?.secoes?.[id] !== false;
+}
+
 /* ---- Cabeçalho ---- */
-function HeaderSumula({ partida }: { partida: Partida }) {
+function HeaderSumula({ partida, salvar }: { partida: Partida; salvar: (fn: () => Promise<unknown>) => Promise<void> }) {
   const titulo = partida.fase ?? `Rodada ${partida.rodada}`;
+  const [edit, setEdit] = useState(false);
+  const toDateInput = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
+  const [data, setData] = useState(toDateInput(partida.dataPartida));
+  const [local, setLocal] = useState(partida.local ?? '');
+  const [transmissao, setTransmissao] = useState(partida.transmissao ?? '');
+
+  async function salvarDados() {
+    await salvar(() => api.salvarDadosPartida(partida.id, {
+      dataPartida: data ? new Date(data).toISOString() : null,
+      local: local.trim() || null,
+      transmissao: transmissao.trim() || null,
+    }));
+    setEdit(false);
+  }
+
+  const transmissaoNode = (() => {
+    if (!partida.transmissao) return <span className="text-muted-foreground">—</span>;
+    const txt = partida.transmissao.trim();
+    const ehLink = /^https?:\/\//i.test(txt);
+    return ehLink ? (
+      <a href={txt} target="_blank" rel="noopener noreferrer" className="text-foreground underline underline-offset-4 decoration-foreground/40 hover:decoration-foreground inline-flex items-center gap-1">
+        {txt} <ExternalLink className="w-3 h-3" />
+      </a>
+    ) : (
+      <span className="text-foreground">{txt}</span>
+    );
+  })();
+
   return (
     <div className="bg-card rounded-lg border border-border overflow-hidden mb-4">
       <div className="px-4 py-3 bg-primary/90 text-primary-foreground flex items-center justify-between">
-        <h2 className="text-lg font-bold">SÚMULA</h2>
-        <span className="text-sm">Jogo #{partida.id}</span>
+        <h2 className="text-lg font-semibold">Súmula</h2>
+        <div className="flex items-center gap-3 text-sm">
+          <span>Jogo #{partida.id}</span>
+          {!edit ? (
+            <button onClick={() => setEdit(true)} className="text-xs underline flex items-center gap-1">
+              <Pencil className="w-3 h-3" /> Editar
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => { setEdit(false); setData(toDateInput(partida.dataPartida)); setLocal(partida.local ?? ''); setTransmissao(partida.transmissao ?? ''); }} className="text-xs underline">Cancelar</button>
+              <button onClick={salvarDados} className="text-xs underline font-semibold">Salvar</button>
+            </div>
+          )}
+        </div>
       </div>
       <div className="p-4 grid grid-cols-2 gap-4 text-sm">
         <div>
           <p className="text-muted-foreground">Fase</p>
           <p className="text-foreground font-semibold">{titulo}</p>
         </div>
-        <div>
-          <p className="text-muted-foreground">Local</p>
-          <p className="text-foreground font-semibold">{partida.local ?? '—'}</p>
-        </div>
         <div className="col-span-2">
           <p className="text-muted-foreground">Jogo</p>
           <p className="text-foreground font-semibold text-base">
             {partida.mandante?.nome} <span className="text-muted-foreground">×</span> {partida.visitante?.nome}
           </p>
+        </div>
+        <div>
+          <p className="text-muted-foreground mb-1">Data e hora</p>
+          {edit ? (
+            <Input type="datetime-local" value={data} onChange={(e) => setData(e.target.value)} className="h-8 text-sm" />
+          ) : (
+            <p className="text-foreground font-semibold">
+              {partida.dataPartida
+                ? (() => {
+                    const dp = new Date(partida.dataPartida);
+                    const dia = dp.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').slice(0, 3);
+                    const diaCap = dia.charAt(0).toUpperCase() + dia.slice(1);
+                    return `${diaCap}, ${dp.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+                  })()
+                : <span className="text-muted-foreground">A definir</span>}
+            </p>
+          )}
+        </div>
+        <div>
+          <p className="text-muted-foreground mb-1">Local</p>
+          {edit ? (
+            <Input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Campo do Grêmio Vila Nova" className="h-8 text-sm" />
+          ) : (
+            <p className="text-foreground font-semibold">{partida.local ?? <span className="text-muted-foreground">—</span>}</p>
+          )}
+        </div>
+        <div className="col-span-2">
+          <p className="text-muted-foreground mb-1">Transmissão <span className="text-xs">(opcional)</span></p>
+          {edit ? (
+            <Input value={transmissao} onChange={(e) => setTransmissao(e.target.value)} placeholder='YouTube do canal, ou link https://...' className="h-8 text-sm" />
+          ) : transmissaoNode}
         </div>
       </div>
     </div>
@@ -305,15 +419,19 @@ const ARB_ROWS: ArbRowData[] = [
 ];
 
 function ArbitragemSection({
-  partidaId, arbitragem, onSave, salvando, setSalvando, setErro,
+  partidaId, partida, arbitragem, arbitros, onSave, salvando, setSalvando, setErro, salvar,
 }: {
   partidaId: number;
+  partida: Partida;
   arbitragem?: Arbitragem;
+  arbitros: ArbitroCampeonato[];
   onSave: () => void;
   salvando: boolean;
   setSalvando: (v: boolean) => void;
   setErro: (v: string | null) => void;
+  salvar: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
+  const campId = campeonatoAtivo.get()?.id ?? null;
   const [editando, setEditando] = useState(false);
   const [emails, setEmails] = useState<Record<ArbitragemEmailKey, string>>({
     juizEmail: arbitragem?.juiz?.email ?? '',
@@ -326,8 +444,54 @@ function ArbitragemSection({
     observadorVarEmail: arbitragem?.observadorVar?.email ?? '',
   });
   const [auxEmail, setAuxEmail] = useState('');
+  const [convEmail, setConvEmail] = useState('');
+  const [convNome, setConvNome] = useState('');
+  const ocultos = new Set(partida.camposArbitragemOcultos ?? []);
 
-  async function salvar() {
+  async function convidarArbitro() {
+    if (!campId || !convEmail.trim()) return;
+    try {
+      await api.convidarArbitro(campId, { email: convEmail.trim(), nome: convNome.trim() || null });
+      setConvEmail(''); setConvNome('');
+      onSave();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Erro ao convidar árbitro');
+    }
+  }
+
+  async function esconderCampo(k: string) {
+    const nova = Array.from(new Set([...(partida.camposArbitragemOcultos ?? []), k]));
+    await salvar(() => api.salvarDadosPartida(partidaId, { camposArbitragemOcultos: nova }));
+  }
+
+  async function removerDaPosicao(k: ArbitragemEmailKey) {
+    setErro(null);
+    setSalvando(true);
+    try {
+      await api.salvarArbitragem(partidaId, {
+        juizEmail: k === 'juizEmail' ? null : (arbitragem?.juiz?.email ?? null),
+        assistente1Email: k === 'assistente1Email' ? null : (arbitragem?.assistente1?.email ?? null),
+        assistente2Email: k === 'assistente2Email' ? null : (arbitragem?.assistente2?.email ?? null),
+        quartoArbitroEmail: k === 'quartoArbitroEmail' ? null : (arbitragem?.quartoArbitro?.email ?? null),
+        varEmail: k === 'varEmail' ? null : (arbitragem?.var?.email ?? null),
+        avarEmail: k === 'avarEmail' ? null : (arbitragem?.avar?.email ?? null),
+        avar2Email: k === 'avar2Email' ? null : (arbitragem?.avar2?.email ?? null),
+        observadorVarEmail: k === 'observadorVarEmail' ? null : (arbitragem?.observadorVar?.email ?? null),
+      });
+      setEmails((e) => ({ ...e, [k]: '' }));
+      onSave();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Erro ao remover árbitro');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function mostrarTodos() {
+    await salvar(() => api.salvarDadosPartida(partidaId, { camposArbitragemOcultos: [] }));
+  }
+
+  async function salvarArbitragem() {
     setErro(null);
     setSalvando(true);
     try {
@@ -373,32 +537,92 @@ function ArbitragemSection({
   return (
     <CBFSection title="Arbitragem" right={
       !editando ? (
-        <button onClick={() => setEditando(true)} className="text-xs underline">Atribuir</button>
+        <div className="flex gap-3">
+          <button
+            onClick={async () => {
+              if (!confirm('Limpar a arbitragem? Essa ação remove todos os árbitros atribuídos.')) return;
+              setErro(null);
+              setSalvando(true);
+              try {
+                await api.salvarArbitragem(partidaId, {
+                  juizEmail: null, assistente1Email: null, assistente2Email: null,
+                  quartoArbitroEmail: null, varEmail: null, avarEmail: null,
+                  avar2Email: null, observadorVarEmail: null,
+                });
+                setEmails({
+                  juizEmail: '', assistente1Email: '', assistente2Email: '',
+                  quartoArbitroEmail: '', varEmail: '', avarEmail: '',
+                  avar2Email: '', observadorVarEmail: '',
+                });
+                onSave();
+              } catch (err) {
+                setErro(err instanceof ApiError ? err.message : 'Erro ao limpar arbitragem');
+              } finally {
+                setSalvando(false);
+              }
+            }}
+            disabled={salvando}
+            className="text-xs underline text-primary-foreground/70 hover:text-primary-foreground"
+          >
+            Excluir
+          </button>
+          <button onClick={() => setEditando(true)} className="text-xs underline">Atribuir</button>
+        </div>
       ) : (
         <div className="flex gap-2">
           <button onClick={() => setEditando(false)} className="text-xs underline">Cancelar</button>
-          <button onClick={salvar} disabled={salvando} className="text-xs underline font-semibold">Salvar</button>
+          <button onClick={salvarArbitragem} disabled={salvando} className="text-xs underline font-semibold">Salvar</button>
         </div>
       )
     }>
       <table className="w-full text-sm">
         <tbody>
           {ARB_ROWS.map((row) => {
+            if (ocultos.has(row.emailKey)) return null;
             const user = arbitragem?.[row.key] as { nome: string; email: string } | null | undefined;
             return (
               <tr key={row.emailKey} className="border-b border-border last:border-0">
                 <td className="py-1.5 text-muted-foreground w-40">{row.label}</td>
                 <td className="py-1.5 text-foreground">
                   {editando ? (
-                    <Input
-                      placeholder="email@exemplo.com"
-                      value={emails[row.emailKey]}
-                      onChange={(e) => setEmails({ ...emails, [row.emailKey]: e.target.value })}
-                      className="h-8 text-sm"
-                    />
+                    <Select
+                      value={emails[row.emailKey] || ''}
+                      onValueChange={(v) => setEmails({ ...emails, [row.emailKey]: v === '__none__' ? '' : v })}
+                    >
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="— Selecionar árbitro —" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {arbitros.map((a) => (
+                          <SelectItem key={a.id} value={a.email} disabled={a.status !== 'ACEITO'}>
+                            {a.nome ?? a.email} {a.status !== 'ACEITO' && <span className="text-xs text-muted-foreground">(pendente)</span>}
+                          </SelectItem>
+                        ))}
+                        {arbitros.length === 0 && (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum árbitro cadastrado no campeonato</div>
+                        )}
+                      </SelectContent>
+                    </Select>
                   ) : (
                     user ? <>{user.nome} <span className="text-muted-foreground text-xs">({user.email})</span></> : <span className="text-muted-foreground">—</span>
                   )}
+                </td>
+                <td className="w-6 text-right">
+                  <button
+                    onClick={() => {
+                      if (user) {
+                        if (!confirm(`Remover ${user.nome} de ${row.label}?`)) return;
+                        removerDaPosicao(row.emailKey);
+                      } else {
+                        if (!confirm(`Esconder "${row.label}" nesta partida?`)) return;
+                        esconderCampo(row.emailKey);
+                      }
+                    }}
+                    disabled={salvando}
+                    className="text-muted-foreground hover:text-destructive"
+                    title={user ? `Remover ${user.nome}` : `Esconder ${row.label}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </td>
               </tr>
             );
@@ -406,8 +630,45 @@ function ArbitragemSection({
         </tbody>
       </table>
 
+      {ocultos.size > 0 && (
+        <p className="mt-2 text-xs">
+          <button onClick={mostrarTodos} className="underline text-muted-foreground hover:text-foreground">
+            Mostrar todas as posições ({ocultos.size} escondida{ocultos.size > 1 ? 's' : ''})
+          </button>
+        </p>
+      )}
+
       <div className="mt-4 pt-4 border-t border-border">
-        <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">Auxiliares (co-editores)</p>
+        <p className="text-xs text-muted-foreground mb-2">Árbitros do campeonato</p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {arbitros.map((a) => (
+            <span key={a.id} className="inline-flex items-center gap-1 bg-muted px-2 py-1 rounded text-xs">
+              {a.nome ?? a.email}
+              {a.status !== 'ACEITO' && <span className="text-muted-foreground">(pendente)</span>}
+              <button
+                onClick={async () => {
+                  if (!campId) return;
+                  if (!confirm(`Remover ${a.nome ?? a.email} dos árbitros do campeonato?`)) return;
+                  try { await api.removerArbitroCampeonato(campId, a.id); onSave(); }
+                  catch { /* ignore */ }
+                }}
+                className="ml-1 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          {arbitros.length === 0 && <span className="text-xs text-muted-foreground">Nenhum.</span>}
+        </div>
+        <div className="flex gap-2 mb-4">
+          <Input placeholder="email do árbitro" value={convEmail}
+            onChange={(e) => setConvEmail(e.target.value)} className="h-8 text-sm max-w-xs" />
+          <Input placeholder="nome (opcional)" value={convNome}
+            onChange={(e) => setConvNome(e.target.value)} className="h-8 text-sm max-w-xs" />
+          <Button size="sm" onClick={convidarArbitro} variant="outline">Convidar</Button>
+        </div>
+
+        <p className="text-xs text-muted-foreground mb-2">Auxiliares da súmula (co-editores desta partida)</p>
         <div className="flex flex-wrap gap-2 mb-2">
           {(arbitragem?.auxiliares ?? []).map((a) => (
             <span key={a.id} className="inline-flex items-center gap-1 bg-muted px-2 py-1 rounded text-xs">
@@ -433,80 +694,88 @@ function ArbitragemSection({
 
 /* ---- Cronologia ---- */
 function CronologiaSection({
-  partidaId, cronologia, salvar,
+  partidaId, cronologia, dataPartida, cfg, salvar,
 }: {
-  partidaId: number; cronologia?: Cronologia;
+  partidaId: number; cronologia?: Cronologia; dataPartida: string | null;
+  cfg: SumulaConfig;
   salvar: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
+  const mostrarEntradas = subLigada(cfg, 'cronologia', 'entradas');
+  const mostrarTempos = subLigada(cfg, 'cronologia', 'tempos');
+  if (!mostrarEntradas && !mostrarTempos) return null;
   const toTimeInput = (iso: string | null | undefined) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
+  // Default: usa data do jogo pra todos os horários, assim o adm só mexe no horário
+  const defaultDia = toTimeInput(dataPartida);
   const [f, setF] = useState(() => ({
-    entradaMandante: toTimeInput(cronologia?.entradaMandante),
-    entradaVisitante: toTimeInput(cronologia?.entradaVisitante),
-    inicio1T: toTimeInput(cronologia?.inicio1T),
-    termino1T: toTimeInput(cronologia?.termino1T),
+    entradaMandante: toTimeInput(cronologia?.entradaMandante) || defaultDia,
+    entradaVisitante: toTimeInput(cronologia?.entradaVisitante) || defaultDia,
+    inicio1T: toTimeInput(cronologia?.inicio1T) || defaultDia,
+    termino1T: toTimeInput(cronologia?.termino1T) || defaultDia,
     acrescimo1T: cronologia?.acrescimo1T ?? ('' as number | ''),
-    inicio2T: toTimeInput(cronologia?.inicio2T),
-    termino2T: toTimeInput(cronologia?.termino2T),
+    inicio2T: toTimeInput(cronologia?.inicio2T) || defaultDia,
+    termino2T: toTimeInput(cronologia?.termino2T) || defaultDia,
     acrescimo2T: cronologia?.acrescimo2T ?? ('' as number | ''),
-    placar1TMandante: cronologia?.placar1TMandante ?? ('' as number | ''),
-    placar1TVisitante: cronologia?.placar1TVisitante ?? ('' as number | ''),
   }));
 
   const toIso = (v: string) => (v ? new Date(v).toISOString() : null);
 
+  const payload = () => ({
+    entradaMandante: toIso(f.entradaMandante),
+    entradaVisitante: toIso(f.entradaVisitante),
+    inicio1T: toIso(f.inicio1T),
+    termino1T: toIso(f.termino1T),
+    acrescimo1T: f.acrescimo1T === '' ? null : Number(f.acrescimo1T),
+    inicio2T: toIso(f.inicio2T),
+    termino2T: toIso(f.termino2T),
+    acrescimo2T: f.acrescimo2T === '' ? null : Number(f.acrescimo2T),
+  });
+
+  const vazio = {
+    entradaMandante: null, entradaVisitante: null,
+    inicio1T: null, termino1T: null, acrescimo1T: null,
+    inicio2T: null, termino2T: null, acrescimo2T: null,
+  };
+
   return (
     <CBFSection title="Cronologia" right={
-      <button
-        onClick={() =>
-          salvar(() => api.salvarCronologia(partidaId, {
-            entradaMandante: toIso(f.entradaMandante),
-            entradaVisitante: toIso(f.entradaVisitante),
-            inicio1T: toIso(f.inicio1T),
-            termino1T: toIso(f.termino1T),
-            acrescimo1T: f.acrescimo1T === '' ? null : Number(f.acrescimo1T),
-            inicio2T: toIso(f.inicio2T),
-            termino2T: toIso(f.termino2T),
-            acrescimo2T: f.acrescimo2T === '' ? null : Number(f.acrescimo2T),
-            placar1TMandante: f.placar1TMandante === '' ? null : Number(f.placar1TMandante),
-            placar1TVisitante: f.placar1TVisitante === '' ? null : Number(f.placar1TVisitante),
-          }))
-        }
-        className="text-xs underline font-semibold"
-      >
-        Salvar
-      </button>
+      <AcoesSecao
+        confirmLabel="a cronologia"
+        onSalvar={() => salvar(() => api.salvarCronologia(partidaId, payload()))}
+        onExcluir={() => {
+          setF({
+            entradaMandante: '', entradaVisitante: '',
+            inicio1T: '', termino1T: '', acrescimo1T: '',
+            inicio2T: '', termino2T: '', acrescimo2T: '',
+          });
+          salvar(() => api.salvarCronologia(partidaId, vazio));
+        }}
+      />
     }>
       <div className="grid grid-cols-2 gap-6 text-sm">
         {[{ pre: '1T', lab: '1º Tempo' }, { pre: '2T', lab: '2º Tempo' }].map((t) => (
           <div key={t.pre}>
-            <h4 className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{t.lab}</h4>
+            <h4 className="text-xs text-muted-foreground mb-2">{t.lab}</h4>
             <div className="space-y-2">
-              <TimeField label="Entrada mandante"
+              {mostrarEntradas && <TimeField label="Entrada mandante"
                 value={t.pre === '1T' ? f.entradaMandante : ''}
                 onChange={t.pre === '1T' ? (v) => setF({ ...f, entradaMandante: v }) : undefined}
-                show={t.pre === '1T'} />
-              <TimeField label="Entrada visitante"
+                show={t.pre === '1T'} />}
+              {mostrarEntradas && <TimeField label="Entrada visitante"
                 value={t.pre === '1T' ? f.entradaVisitante : ''}
                 onChange={t.pre === '1T' ? (v) => setF({ ...f, entradaVisitante: v }) : undefined}
-                show={t.pre === '1T'} />
-              <TimeField label={`Início ${t.pre}`}
+                show={t.pre === '1T'} />}
+              {mostrarTempos && <TimeField label={`Início ${t.pre}`}
                 value={t.pre === '1T' ? f.inicio1T : f.inicio2T}
-                onChange={(v) => setF({ ...f, [`inicio${t.pre}`]: v } as typeof f)} />
-              <TimeField label={`Término ${t.pre}`}
+                onChange={(v) => setF({ ...f, [`inicio${t.pre}`]: v } as typeof f)} />}
+              {mostrarTempos && <TimeField label={`Término ${t.pre}`}
                 value={t.pre === '1T' ? f.termino1T : f.termino2T}
-                onChange={(v) => setF({ ...f, [`termino${t.pre}`]: v } as typeof f)} />
-              <IntField label={`Acréscimo ${t.pre} (min)`}
+                onChange={(v) => setF({ ...f, [`termino${t.pre}`]: v } as typeof f)} />}
+              {mostrarTempos && <IntField label={`Acréscimo ${t.pre} (min)`}
                 value={t.pre === '1T' ? f.acrescimo1T : f.acrescimo2T}
-                onChange={(v) => setF({ ...f, [`acrescimo${t.pre}`]: v } as typeof f)} />
+                onChange={(v) => setF({ ...f, [`acrescimo${t.pre}`]: v } as typeof f)} />}
             </div>
           </div>
         ))}
-        <div className="col-span-2 grid grid-cols-2 gap-6">
-          <IntField label="Placar 1T mandante" value={f.placar1TMandante}
-            onChange={(v) => setF({ ...f, placar1TMandante: v })} />
-          <IntField label="Placar 1T visitante" value={f.placar1TVisitante}
-            onChange={(v) => setF({ ...f, placar1TVisitante: v })} />
-        </div>
       </div>
     </CBFSection>
   );
@@ -534,7 +803,7 @@ function IntField({ label, value, onChange }: { label: string; value: number | '
 
 /* ---- Escalação ---- */
 function EscalacaoSection({
-  partidaId, mandante, visitante, jogMandante, jogVisitante, escalacaoAtual, salvar,
+  partidaId, mandante, visitante, jogMandante, jogVisitante, escalacaoAtual, cfg, salvar,
 }: {
   partidaId: number;
   mandante: TimeResumo;
@@ -542,8 +811,12 @@ function EscalacaoSection({
   jogMandante: Jogador[];
   jogVisitante: Jogador[];
   escalacaoAtual: EscalacaoEntry[];
+  cfg: SumulaConfig;
   salvar: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
+  const mostrarTitulares = subLigada(cfg, 'escalacao', 'titulares');
+  const mostrarReservas = subLigada(cfg, 'escalacao', 'reservas');
+  if (!mostrarTitulares && !mostrarReservas) return null;
   const [esc, setEsc] = useState<Map<number, 'TITULAR' | 'RESERVA'>>(() => {
     const m = new Map<number, 'TITULAR' | 'RESERVA'>();
     for (const e of escalacaoAtual) m.set(e.jogadorId, e.tipo);
@@ -569,7 +842,14 @@ function EscalacaoSection({
 
   return (
     <CBFSection title="Relação de Jogadores" right={
-      <button onClick={salvarEscalacao} className="text-xs underline font-semibold">Salvar</button>
+      <AcoesSecao
+        confirmLabel="a escalação"
+        onSalvar={salvarEscalacao}
+        onExcluir={() => {
+          setEsc(new Map());
+          salvar(() => api.salvarEscalacao(partidaId, { titulares: [], reservas: [] }));
+        }}
+      />
     }>
       <div className="grid grid-cols-2 gap-4">
         {[
@@ -577,14 +857,15 @@ function EscalacaoSection({
           { time: visitante, jogadores: jogVisitante },
         ].map(({ time, jogadores }) => (
           <div key={time.id}>
-            <h4 className="text-xs uppercase tracking-wide text-primary font-bold mb-2">{time.nome}</h4>
+            <h4 className="text-xs text-primary font-bold mb-2">{time.nome}</h4>
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-muted-foreground border-b border-border">
                   <th className="text-left py-1 w-8">Nº</th>
                   <th className="text-left py-1">Jogador</th>
-                  <th className="text-center py-1 w-12">T</th>
-                  <th className="text-center py-1 w-12">R</th>
+                  {mostrarTitulares && <th className="text-center py-1 w-12">T</th>}
+                  {mostrarReservas && <th className="text-center py-1 w-12">R</th>}
+                  <th className="w-6"></th>
                 </tr>
               </thead>
               <tbody>
@@ -595,25 +876,46 @@ function EscalacaoSection({
                       {j.apelido ?? j.nome}
                       {j.posicao === 'GOLEIRO' && <span className="text-muted-foreground"> (g)</span>}
                     </td>
-                    <td className="text-center">
+                    {mostrarTitulares && <td className="text-center">
                       <input type="checkbox" checked={esc.get(j.id) === 'TITULAR'}
                         onChange={() => toggle(j.id, 'TITULAR')} className="h-3 w-3 accent-primary" />
-                    </td>
-                    <td className="text-center">
+                    </td>}
+                    {mostrarReservas && <td className="text-center">
                       <input type="checkbox" checked={esc.get(j.id) === 'RESERVA'}
                         onChange={() => toggle(j.id, 'RESERVA')} className="h-3 w-3 accent-primary" />
+                    </td>}
+                    <td className="text-right">
+                      {esc.has(j.id) && (
+                        <button
+                          onClick={() => {
+                            const n = new Map(esc); n.delete(j.id); setEsc(n);
+                            const titulares: number[] = [];
+                            const reservas: number[] = [];
+                            for (const [jId, tipo] of n) {
+                              if (tipo === 'TITULAR') titulares.push(jId); else reservas.push(jId);
+                            }
+                            salvar(() => api.salvarEscalacao(partidaId, { titulares, reservas }));
+                          }}
+                          className="text-muted-foreground hover:text-destructive"
+                          title="Tirar da escalação"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
                 {jogadores.length === 0 && (
-                  <tr><td colSpan={4} className="py-2 text-center text-muted-foreground">Sem jogadores cadastrados.</td></tr>
+                  <tr><td colSpan={3 + (mostrarTitulares ? 1 : 0) + (mostrarReservas ? 1 : 0)} className="py-2 text-center text-muted-foreground">Sem jogadores cadastrados.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground mt-2">T = Titular · R = Reserva · (g) = Goleiro</p>
+      <p className="text-xs text-muted-foreground mt-2">
+        {mostrarTitulares && 'T = Titular'}{mostrarTitulares && mostrarReservas && ' · '}{mostrarReservas && 'R = Reserva'} · (g) = Goleiro
+      </p>
     </CBFSection>
   );
 }
@@ -630,7 +932,7 @@ function ComissaoBlock({
       <div className="grid grid-cols-2 gap-4 text-sm">
         {[{ nome: mandanteNome, lista: mandante }, { nome: visitanteNome, lista: visitante }].map((t) => (
           <div key={t.nome}>
-            <h4 className="text-xs uppercase tracking-wide text-primary font-bold mb-2">{t.nome}</h4>
+            <h4 className="text-xs text-primary font-bold mb-2">{t.nome}</h4>
             {t.lista.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nenhum membro cadastrado.</p>
             ) : (
@@ -731,7 +1033,7 @@ function GolsSection({
         </table>
       )}
 
-      <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">Adicionar gol</p>
+      <p className="text-xs text-muted-foreground mb-2">Adicionar gol</p>
       <div className="grid grid-cols-6 gap-2 items-end">
         <div className="col-span-2">
           <Label className="text-xs font-normal text-muted-foreground">Equipe</Label>
@@ -836,7 +1138,7 @@ function CartoesSection({
         { nome: 'Cartões Vermelhos', lista: vermelhos, cor: 'bg-red-600' },
       ].map((bloco) => (
         <div key={bloco.nome} className="mb-3">
-          <h4 className="text-xs uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-2">
+          <h4 className="text-xs text-muted-foreground mb-1 flex items-center gap-2">
             <span className={`inline-block w-3 h-4 rounded-sm ${bloco.cor}`} /> {bloco.nome}
           </h4>
           {bloco.lista.length === 0 ? (
@@ -885,7 +1187,7 @@ function CartoesSection({
       ))}
 
       <div className="mt-4 pt-4 border-t border-border">
-        <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">Adicionar cartão</p>
+        <p className="text-xs text-muted-foreground mb-2">Adicionar cartão</p>
         <div className="grid grid-cols-6 gap-2 items-end">
           <div className="col-span-2">
             <Label className="text-xs font-normal text-muted-foreground">Equipe</Label>
@@ -1027,7 +1329,7 @@ function SubstituicoesSection({
         </table>
       )}
 
-      <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">Adicionar substituição</p>
+      <p className="text-xs text-muted-foreground mb-2">Adicionar substituição</p>
       <div className="grid grid-cols-6 gap-2 items-end">
         <div>
           <Label className="text-xs font-normal text-muted-foreground">Equipe</Label>
@@ -1121,9 +1423,38 @@ function StatsSection({
     });
   }
 
+  function excluirLinha(chave: K, label: string) {
+    if (!confirm(`Limpar o indicador "${label}" para os dois times?`)) return;
+    const next = {
+      [mandanteId]: { ...vals[mandanteId], [chave]: '' as number | '' },
+      [visitanteId]: { ...vals[visitanteId], [chave]: '' as number | '' },
+    };
+    setVals(next);
+    const payload: { timeId: number; chave: K; valor: number }[] = [];
+    for (const timeId of [mandanteId, visitanteId]) {
+      for (const { chave: k } of CHAVES_STAT) {
+        if (k === chave) continue;
+        const v = next[timeId][k];
+        if (v !== '' && !Number.isNaN(Number(v))) payload.push({ timeId, chave: k, valor: Number(v) });
+      }
+    }
+    salvar(() => api.salvarStats(partidaId, payload));
+  }
+
   return (
     <CBFSection title="Estatísticas" right={
-      <button onClick={salvarStats} className="text-xs underline font-semibold">Salvar</button>
+      <AcoesSecao
+        confirmLabel="as estatísticas"
+        onSalvar={salvarStats}
+        onExcluir={() => {
+          const vazio = {
+            [mandanteId]: Object.fromEntries(CHAVES_STAT.map((c) => [c.chave, ''])) as Record<K, number | ''>,
+            [visitanteId]: Object.fromEntries(CHAVES_STAT.map((c) => [c.chave, ''])) as Record<K, number | ''>,
+          };
+          setVals(vazio);
+          salvar(() => api.salvarStats(partidaId, []));
+        }}
+      />
     }>
       <table className="w-full text-sm">
         <thead>
@@ -1131,6 +1462,7 @@ function StatsSection({
             <th className="text-left py-1">Indicador</th>
             <th className="text-right py-1">{mandanteNome}</th>
             <th className="text-right py-1">{visitanteNome}</th>
+            <th className="w-8"></th>
           </tr>
         </thead>
         <tbody>
@@ -1145,6 +1477,15 @@ function StatsSection({
                 <Input type="number" min={0} className="h-7 text-sm text-right w-20 ml-auto"
                   value={vals[visitanteId][chave]} onChange={(e) => setVal(visitanteId, chave, e.target.value)} />
               </td>
+              <td className="py-1 text-right">
+                <button
+                  onClick={() => excluirLinha(chave, label)}
+                  className="text-muted-foreground hover:text-destructive"
+                  title={`Limpar ${label}`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -1155,10 +1496,11 @@ function StatsSection({
 
 /* ---- Observações ---- */
 function ObservacoesSection({
-  partidaId, obs, salvar,
+  partidaId, obs, cfg, salvar,
 }: {
   partidaId: number;
   obs?: ObservacoesPartida;
+  cfg: SumulaConfig;
   salvar: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
   const [v, setV] = useState({
@@ -1167,25 +1509,38 @@ function ObservacoesSection({
     observacoesEventuais: obs?.observacoesEventuais ?? '',
     relatorioAssistente: obs?.relatorioAssistente ?? '',
   });
+  const campos = ([
+    { key: 'ocorrencias' as const, label: 'Ocorrências / Observações', sub: 'ocorrencias' },
+    { key: 'motivoAtraso' as const, label: 'Motivo de atraso e acréscimos', sub: 'motivoAtraso' },
+    { key: 'observacoesEventuais' as const, label: 'Observações eventuais', sub: 'observacoesEventuais' },
+    { key: 'relatorioAssistente' as const, label: 'Relatório do assistente', sub: 'relatorioAssistente' },
+  ]).filter((c) => subLigada(cfg, 'observacoes', c.sub));
+  if (campos.length === 0) return null;
 
   return (
     <CBFSection title="Observações" right={
-      <button onClick={() => salvar(() => api.salvarObservacoes(partidaId, {
-        ocorrencias: v.ocorrencias || null,
-        motivoAtraso: v.motivoAtraso || null,
-        observacoesEventuais: v.observacoesEventuais || null,
-        relatorioAssistente: v.relatorioAssistente || null,
-      }))} className="text-xs underline font-semibold">Salvar</button>
+      <AcoesSecao
+        confirmLabel="as observações"
+        onSalvar={() => salvar(() => api.salvarObservacoes(partidaId, {
+          ocorrencias: v.ocorrencias || null,
+          motivoAtraso: v.motivoAtraso || null,
+          observacoesEventuais: v.observacoesEventuais || null,
+          relatorioAssistente: v.relatorioAssistente || null,
+        }))}
+        onExcluir={() => {
+          setV({ ocorrencias: '', motivoAtraso: '', observacoesEventuais: '', relatorioAssistente: '' });
+          salvar(() => api.salvarObservacoes(partidaId, {
+            ocorrencias: null, motivoAtraso: null, observacoesEventuais: null, relatorioAssistente: null,
+          }));
+        }}
+      />
     }>
       <div className="grid grid-cols-2 gap-4 text-sm">
-        {[
-          { key: 'ocorrencias' as const, label: 'Ocorrências / Observações' },
-          { key: 'motivoAtraso' as const, label: 'Motivo de atraso e acréscimos' },
-          { key: 'observacoesEventuais' as const, label: 'Observações eventuais' },
-          { key: 'relatorioAssistente' as const, label: 'Relatório do assistente' },
-        ].map((c) => (
+        {campos.map((c) => (
           <div key={c.key} className="space-y-1">
-            <Label className="text-xs font-normal text-muted-foreground">{c.label}</Label>
+            <Label className="text-xs font-normal text-muted-foreground">
+              {c.label} <span className="italic">(opcional)</span>
+            </Label>
             <textarea rows={3}
               value={v[c.key]}
               onChange={(e) => setV({ ...v, [c.key]: e.target.value })}
@@ -1197,18 +1552,95 @@ function ObservacoesSection({
   );
 }
 
-/* ---- Placar final (fecha a partida) ---- */
-function PlacarFinalSection({
-  partida, salvando, onSalvar,
+/* ---- Campos custom (configurados por campeonato) ---- */
+function CamposCustomSection({
+  partidaId, campos, valores, salvar,
 }: {
-  partida: Partida; salvando: boolean;
-  onSalvar: (data: {
+  partidaId: number;
+  campos: CampoCustom[];
+  valores: Record<string, CampoCustomValor>;
+  salvar: (fn: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [v, setV] = useState<Record<string, CampoCustomValor>>(valores ?? {});
+
+  function set(id: string, val: CampoCustomValor) {
+    setV((prev) => ({ ...prev, [id]: val }));
+  }
+
+  return (
+    <CBFSection title="Campos adicionais" right={
+      <AcoesSecao
+        confirmLabel="os campos adicionais"
+        onSalvar={() => salvar(() => api.salvarDadosPartida(partidaId, { camposCustom: v }))}
+        onExcluir={() => {
+          const vazio: Record<string, CampoCustomValor> = {};
+          campos.forEach((c) => { vazio[c.id] = c.tipo === 'boolean' ? false : null; });
+          setV(vazio);
+          salvar(() => api.salvarDadosPartida(partidaId, { camposCustom: vazio }));
+        }}
+      />
+    }>
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        {campos.map((c) => (
+          <div key={c.id} className="space-y-1">
+            <Label className="text-xs font-normal text-muted-foreground">{c.label}</Label>
+            {c.tipo === 'boolean' ? (
+              <label className="flex items-center gap-2">
+                <input type="checkbox"
+                  checked={!!v[c.id]}
+                  onChange={(e) => set(c.id, e.target.checked)}
+                  className="h-4 w-4" />
+                <span className="text-sm">Sim</span>
+              </label>
+            ) : (
+              <Input
+                type={c.tipo === 'numero' ? 'number' : 'text'}
+                value={v[c.id] == null ? '' : String(v[c.id])}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === '') return set(c.id, null);
+                  set(c.id, c.tipo === 'numero' ? Number(raw) : raw);
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </CBFSection>
+  );
+}
+
+/* ---- Placar (1T + final) ---- */
+function PlacarContador({ label, valor, onChange }: { label: string; valor: number | null; onChange: (v: number) => void }) {
+  const v = valor ?? 0;
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-2">
+        <button onClick={() => onChange(Math.max(0, v - 1))}
+          className="w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-foreground">−</button>
+        <div className="w-14 h-12 rounded-lg bg-foreground text-background flex items-center justify-center text-2xl font-scoreboard">{v}</div>
+        <button onClick={() => onChange(v + 1)}
+          className="w-7 h-7 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">+</button>
+      </div>
+    </div>
+  );
+}
+
+function PlacarSection({
+  partida, cronologia, salvando, salvar1T, onSalvarFinal,
+}: {
+  partida: Partida; cronologia?: Cronologia; salvando: boolean;
+  salvar1T: (dados: { m: number | null; v: number | null }) => Promise<unknown>;
+  onSalvarFinal: (data: {
     golsMandante: number; golsVisitante: number;
     prorrogacao?: boolean;
     golsMandanteProrr?: number | null; golsVisitanteProrr?: number | null;
     penaltisMandante?: number | null; penaltisVisitante?: number | null;
   }) => Promise<unknown>;
 }) {
+  const [gm1, setGm1] = useState<number>(cronologia?.placar1TMandante ?? 0);
+  const [gv1, setGv1] = useState<number>(cronologia?.placar1TVisitante ?? 0);
   const [gm, setGm] = useState(partida.golsMandante ?? 0);
   const [gv, setGv] = useState(partida.golsVisitante ?? 0);
   const [prorr, setProrr] = useState(partida.prorrogacao);
@@ -1218,42 +1650,45 @@ function PlacarFinalSection({
   const [penV, setPenV] = useState(partida.penaltisVisitante != null ? String(partida.penaltisVisitante) : '');
 
   return (
-    <CBFSection title="Placar final · Fechar súmula" right={
-      <Button size="sm" variant="secondary" onClick={() => onSalvar({
-        golsMandante: gm,
-        golsVisitante: gv,
-        prorrogacao: prorr,
-        golsMandanteProrr: prorr && prorrGm !== '' ? Number(prorrGm) : null,
-        golsVisitanteProrr: prorr && prorrGv !== '' ? Number(prorrGv) : null,
-        penaltisMandante: penM !== '' ? Number(penM) : null,
-        penaltisVisitante: penV !== '' ? Number(penV) : null,
-      })} disabled={salvando} className="gap-1">
-        {salvando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-        Fechar
-      </Button>
+    <CBFSection title="Placar · Fechar súmula" right={
+      <div className="flex gap-3">
+        <button onClick={() => salvar1T({ m: gm1, v: gv1 })} disabled={salvando} className="text-xs underline">
+          Salvar 1º tempo
+        </button>
+        <Button size="sm" variant="secondary" onClick={() => onSalvarFinal({
+          golsMandante: gm,
+          golsVisitante: gv,
+          prorrogacao: prorr,
+          golsMandanteProrr: prorr && prorrGm !== '' ? Number(prorrGm) : null,
+          golsVisitanteProrr: prorr && prorrGv !== '' ? Number(prorrGv) : null,
+          penaltisMandante: penM !== '' ? Number(penM) : null,
+          penaltisVisitante: penV !== '' ? Number(penV) : null,
+        })} disabled={salvando} className="gap-1">
+          {salvando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+          Fechar
+        </Button>
+      </div>
     }>
-      <div className="flex items-center justify-center gap-6">
-        <div className="flex flex-col items-center gap-1 flex-1">
-          <p className="text-foreground text-center font-semibold text-sm">{partida.mandante?.nome}</p>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setGm(Math.max(0, gm - 1))}
-              className="w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-foreground">−</button>
-            <div className="w-16 h-14 rounded-lg bg-foreground text-background flex items-center justify-center text-2xl font-bold">{gm}</div>
-            <button onClick={() => setGm(gm + 1)}
-              className="w-7 h-7 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">+</button>
+      <div className="grid grid-cols-2 gap-6">
+        {[
+          { lab: '1º tempo', m: gm1, v: gv1, setM: setGm1, setV: setGv1 },
+          { lab: 'Final',    m: gm,  v: gv,  setM: setGm,  setV: setGv },
+        ].map((bloco) => (
+          <div key={bloco.lab} className="rounded-md border border-border p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground text-center mb-3">{bloco.lab}</p>
+            <div className="flex items-center justify-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-foreground text-center mb-1 truncate">{partida.mandante?.nome}</p>
+                <PlacarContador label="mandante" valor={bloco.m} onChange={bloco.setM} />
+              </div>
+              <span className="text-muted-foreground text-xl">×</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-foreground text-center mb-1 truncate">{partida.visitante?.nome}</p>
+                <PlacarContador label="visitante" valor={bloco.v} onChange={bloco.setV} />
+              </div>
+            </div>
           </div>
-        </div>
-        <span className="text-muted-foreground text-xl">×</span>
-        <div className="flex flex-col items-center gap-1 flex-1">
-          <p className="text-foreground text-center font-semibold text-sm">{partida.visitante?.nome}</p>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setGv(Math.max(0, gv - 1))}
-              className="w-7 h-7 rounded-full bg-muted hover:bg-muted/80 text-foreground">−</button>
-            <div className="w-16 h-14 rounded-lg bg-foreground text-background flex items-center justify-center text-2xl font-bold">{gv}</div>
-            <button onClick={() => setGv(gv + 1)}
-              className="w-7 h-7 rounded-full bg-primary text-primary-foreground hover:bg-primary/90">+</button>
-          </div>
-        </div>
+        ))}
       </div>
 
       {partida.fase && (

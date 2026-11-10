@@ -17,7 +17,7 @@ publicoRouter.get(
   asyncHandler(async (_req, res) => {
     const lista = await prisma.campeonato.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { times: true } } },
+      include: { _count: { select: { inscricoes: true } } },
     });
     res.json(
       lista.map((c) => ({
@@ -27,7 +27,7 @@ publicoRouter.get(
         status: c.status,
         dataInicio: c.dataInicio,
         dataFim: c.dataFim,
-        qtdTimes: c._count.times,
+        qtdTimes: c._count.inscricoes,
       })),
     );
   }),
@@ -52,7 +52,7 @@ publicoRouter.get(
     const rodadasJogadas = partidas
       .filter((p) => p.status === 'CONCLUIDA')
       .reduce((max, p) => Math.max(max, p.rodada), 0);
-    const qtdTimes = await prisma.time.count({ where: { campeonatoId: id } });
+    const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
     const totalGols = await prisma.gol.count({ where: { partida: { campeonatoId: id } } });
     res.json({
       id: c.id,
@@ -79,7 +79,11 @@ publicoRouter.get(
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const c = await getCamp(id);
-    const times = await prisma.time.findMany({ where: { campeonatoId: id }, orderBy: { nome: 'asc' } });
+    const inscr = await prisma.inscricaoCampeonato.findMany({
+      where: { campeonatoId: id }, include: { time: true },
+      orderBy: { time: { nome: 'asc' } },
+    });
+    const times = inscr.map((i) => i.time);
     const partidas = await prisma.partida.findMany({ where: { campeonatoId: id } });
     res.json(calcular(times, partidas, c.pontosVitoria, c.pontosEmpate, c.criteriosDesempate));
   }),
@@ -93,7 +97,7 @@ publicoRouter.get(
     const grupos = await prisma.grupo.findMany({
       where: { campeonatoId: id },
       orderBy: { nome: 'asc' },
-      include: { times: true },
+      include: { inscricoes: { include: { time: true } } },
     });
     const partidasGrupo = await prisma.partida.findMany({
       where: { campeonatoId: id, NOT: { grupoId: null } },
@@ -103,7 +107,7 @@ publicoRouter.get(
         grupoId: g.id,
         nome: g.nome,
         linhas: calcular(
-          g.times,
+          g.inscricoes.map((i) => i.time),
           partidasGrupo.filter((p) => p.grupoId === g.id),
           c.pontosVitoria,
           c.pontosEmpate,
@@ -125,6 +129,8 @@ publicoRouter.get(
              j."timeId"              AS "timeId",
              t."nome"                AS "timeNome",
              t."escudoUrl"           AS "escudoUrl",
+             t."cor"                 AS "cor",
+             t."abreviacao"          AS "abreviacao",
              COUNT(*)::int           AS gols
       FROM "Gol" g
       JOIN "Partida" p ON p."id" = g."partidaId"
@@ -132,7 +138,7 @@ publicoRouter.get(
       JOIN "Time"    t ON t."id" = j."timeId"
       WHERE p."campeonatoId" = ${id}
         AND g."jogadorId" IS NOT NULL
-      GROUP BY g."jogadorId", j."nome", j."timeId", t."nome", t."escudoUrl"
+      GROUP BY g."jogadorId", j."nome", j."timeId", t."nome", t."escudoUrl", t."cor", t."abreviacao"
       ORDER BY gols DESC, j."nome" ASC
     `;
     res.json(rows);

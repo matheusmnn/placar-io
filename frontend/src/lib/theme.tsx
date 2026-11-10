@@ -12,13 +12,10 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function readStored(): Theme {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === 'dark' || raw === 'light') return raw;
-  } catch {
-    // acesso ao localStorage pode falhar em private mode; segue com o default
-  }
-  return 'dark'; // default escuro, conforme desenho
+  // shortcut: tema travado em claro, desenho é cream-only; voltar a honrar o storage
+  // quando o desenho escuro completo existir.
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignora */ }
+  return 'light';
 }
 
 function apply(theme: Theme) {

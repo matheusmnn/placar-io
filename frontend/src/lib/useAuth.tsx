@@ -20,6 +20,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const entrar = useCallback((r: AuthResponse) => {
     auth.save(r);
+    // Evita que campeonato/time/partida ativos de outra conta vazem pra essa.
+    campeonatoAtivo.clear();
     setUsuario(r.usuario);
   }, []);
 

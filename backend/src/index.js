@@ -29,13 +29,13 @@ app.use(authOptional);
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', authRouter);
+app.use('/api/public', publicoRouter);
 app.use('/api/campeonatos', campeonatosRouter);
 app.use('/api/times', timesRouter);
 app.use('/api/jogadores', jogadoresRouter);
 app.use('/api/partidas', partidasRouter);
 app.use('/api/comissao', comissaoRouter);
 app.use('/api', sumulaRouter); // paths absolutos: /partidas/:id/gols, /gols/:id, etc.
-app.use('/api/public', publicoRouter);
 
 app.use(errorHandler);
 

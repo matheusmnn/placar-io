@@ -1,52 +1,34 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, Loader2, Plus, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { OrganizerLayout } from '../OrganizerLayout';
-import { api, ApiError, CriterioDesempate, Formato, KoDesempate, PlayoffConfig } from '../../lib/api';
+import { TeamShield } from '../TeamShield';
+import { api, ApiError, Campeonato, CriterioDesempate, FaixaTabela, Formato, KoDesempate, PlayoffConfig, Time } from '../../lib/api';
 
 const CRITERIOS_INFO: Record<CriterioDesempate, string> = {
   saldo: 'Saldo de gols',
   golsPro: 'Gols pró',
   golsContra: 'Menos gols sofridos',
   vitorias: 'Mais vitórias',
-  sorteio: 'Sorteio (determinístico)',
+  sorteio: 'Sorteio',
 };
 const CRITERIOS_PADRAO: CriterioDesempate[] = ['saldo', 'golsPro'];
 
-interface FormatoOpcao {
-  value: Formato;
-  label: string;
-  desc: string;
-  grupos?: boolean;
-  temKO?: boolean;
-  playoff?: boolean;
-}
+interface FormatoOpcao { value: Formato; label: string; desc: string; grupos?: boolean; temKO?: boolean; playoff?: boolean; }
 
 const FORMATOS: FormatoOpcao[] = [
   { value: 'PONTOS_CORRIDOS', label: 'Pontos corridos', desc: 'Todos se enfrentam. Vence quem somar mais pontos.' },
-  { value: 'MATA_MATA', label: 'Mata-mata', desc: 'Eliminação direta. Quem perde está fora.', temKO: true },
-  { value: 'GRUPOS', label: 'Grupos', desc: 'Fase de grupos. Cada grupo joga por si.', grupos: true },
-  {
-    value: 'GRUPOS_MATA_MATA',
-    label: 'Grupos + mata-mata',
-    desc: 'Fase de grupos classifica pro mata-mata.',
-    grupos: true,
-    temKO: true,
-  },
-  {
-    value: 'PONTOS_CORRIDOS_MATA_MATA',
-    label: 'Pontos corridos + playoff',
-    desc: 'Liga regular + playoff configurável no fim.',
-    temKO: true,
-    playoff: true,
-  },
+  { value: 'MATA_MATA', label: 'Mata-mata', desc: 'Eliminação direta.', temKO: true },
+  { value: 'GRUPOS', label: 'Grupos', desc: 'Cada grupo joga por si.', grupos: true },
+  { value: 'GRUPOS_MATA_MATA', label: 'Grupos + mata-mata', desc: 'Grupos classificam pro mata-mata.', grupos: true, temKO: true },
+  { value: 'PONTOS_CORRIDOS_MATA_MATA', label: 'Pontos corridos + playoff', desc: 'Liga regular + playoff no fim.', temKO: true, playoff: true },
 ];
 
-const PLAYOFF_TEMPLATES: Record<string, { label: string; cfg: PlayoffConfig | null }> = {
+const PLAYOFF_TEMPLATES: Record<string, { label: string; cfg: PlayoffConfig }> = {
   topQuatro: {
     label: 'Top 4 (1×4, 2×3, final)',
     cfg: { posicoes: [1, 2, 3, 4], chaveamento: [[1, 4], [2, 3]], temFinal: true, idaVolta: false, desempate: 'PENALTIS' },
@@ -56,10 +38,19 @@ const PLAYOFF_TEMPLATES: Record<string, { label: string; cfg: PlayoffConfig | nu
     cfg: { posicoes: [3, 4, 5, 6], chaveamento: [[3, 6], [4, 5]], temFinal: false, idaVolta: false, desempate: 'PENALTIS' },
   },
   eflChampionship: {
-    label: 'EFL Championship (3×6, 4×5, final em jogo único)',
+    label: 'EFL Championship (3×6, 4×5, final única)',
     cfg: { posicoes: [3, 4, 5, 6], chaveamento: [[3, 6], [4, 5]], temFinal: true, idaVolta: true, desempate: 'PRORROGACAO_PENALTIS' },
   },
 };
+
+const CORES_FAIXA = [
+  { nome: 'Verde', hex: '#4a7a3e' },
+  { nome: 'Azul', hex: '#14213d' },
+  { nome: 'Amarelo', hex: '#b8871e' },
+  { nome: 'Laranja', hex: '#c84b1c' },
+  { nome: 'Vermelho', hex: '#a93326' },
+  { nome: 'Cinza', hex: '#6a6355' },
+];
 
 export function CreateChampionship() {
   const navigate = useNavigate();
@@ -76,29 +67,53 @@ export function CreateChampionship() {
   const [playoffTemplate, setPlayoffTemplate] = useState<keyof typeof PLAYOFF_TEMPLATES>('topQuatro');
   const [criterios, setCriterios] = useState<CriterioDesempate[]>(CRITERIOS_PADRAO);
   const [descricao, setDescricao] = useState('');
-
-  function moverCriterio(idx: number, delta: number) {
-    const novo = [...criterios];
-    const alvo = idx + delta;
-    if (alvo < 0 || alvo >= novo.length) return;
-    [novo[idx], novo[alvo]] = [novo[alvo], novo[idx]];
-    setCriterios(novo);
-  }
-  function toggleCriterio(c: CriterioDesempate) {
-    if (criterios.includes(c)) setCriterios(criterios.filter((x) => x !== c));
-    else setCriterios([...criterios, c]);
-  }
+  const [vinculadoId, setVinculadoId] = useState<string>('nenhum');
+  const [faixas, setFaixas] = useState<FaixaTabela[]>([]);
+  const [outros, setOutros] = useState<Campeonato[]>([]);
+  const [meusTimes, setMeusTimes] = useState<Time[]>([]);
+  const [timesSelecionados, setTimesSelecionados] = useState<Set<number>>(new Set());
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    api.listarCampeonatos().then((r) => setOutros(r.campeonatos)).catch(() => setOutros([]));
+    api.listarMeusTimes().then(setMeusTimes).catch(() => setMeusTimes([]));
+  }, []);
+
+  function toggleTime(id: number) {
+    const next = new Set(timesSelecionados);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setTimesSelecionados(next);
+  }
+
   const opcao = FORMATOS.find((f) => f.value === formato)!;
+
+  function moverCriterio(i: number, delta: number) {
+    const a = i + delta;
+    if (a < 0 || a >= criterios.length) return;
+    const novo = [...criterios];
+    [novo[i], novo[a]] = [novo[a], novo[i]];
+    setCriterios(novo);
+  }
+  function toggleCriterio(c: CriterioDesempate) {
+    setCriterios(criterios.includes(c) ? criterios.filter((x) => x !== c) : [...criterios, c]);
+  }
+  function addFaixa() { setFaixas([...faixas, { cor: CORES_FAIXA[0].hex, posInicio: 1, posFim: 1, legenda: '' }]); }
+  function updFaixa(i: number, p: Partial<FaixaTabela>) {
+    setFaixas(faixas.map((f, idx) => (idx === i ? { ...f, ...p } : f)));
+  }
+  function removeFaixa(i: number) { setFaixas(faixas.filter((_, idx) => idx !== i)); }
 
   async function salvar() {
     setErro(null);
     if (!nome.trim()) { setErro('Informe o nome do campeonato'); return; }
+    for (const f of faixas) {
+      if (!f.legenda.trim()) { setErro('Faixa sem legenda.'); return; }
+      if (f.posFim < f.posInicio) { setErro('Faixa com posição final menor que inicial.'); return; }
+    }
     setLoading(true);
     try {
-      await api.criarCampeonato({
+      const campCriado = await api.criarCampeonato({
         nome: nome.trim(),
         formato,
         pontosVitoria,
@@ -112,96 +127,102 @@ export function CreateChampionship() {
         dataInicio: dataInicio || null,
         dataFim: dataFim || null,
         descricao: descricao || null,
+        faixasTabela: faixas.length > 0 ? faixas : null,
+        campeonatoVinculadoId: vinculadoId !== 'nenhum' ? Number(vinculadoId) : null,
       });
+      for (const timeId of timesSelecionados) {
+        try { await api.inscreverTime(campCriado.id, { timeId }); } catch { /* segue — usuário pode inscrever depois */ }
+      }
       navigate('/dashboard');
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Não foi possível salvar o campeonato');
-    } finally {
-      setLoading(false);
-    }
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível salvar');
+    } finally { setLoading(false); }
   }
 
   return (
     <OrganizerLayout>
-      <div className="p-8 max-w-2xl pb-24">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Meus Campeonatos
+      <div className="p-10 pb-20 max-w-3xl">
+        <button onClick={() => navigate('/dashboard')} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-8">
+          <ChevronLeft className="h-4 w-4" /> Painel
         </button>
 
-        <div className="mb-8">
-          <h1 className="text-foreground font-bold">Novo Campeonato</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Preencha as informações para criar seu campeonato</p>
-        </div>
+        <h1 className="font-display text-4xl mb-10">Novo campeonato</h1>
 
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <div className="px-8 py-5 border-b border-border bg-muted/40">
-            <h3 className="text-foreground text-sm font-semibold">Informações do campeonato</h3>
-          </div>
+        {erro && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive mb-6">{erro}</div>}
 
-          <div className="p-8 space-y-7">
-            {erro && (
-              <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive max-w-lg">
-                {erro}
-              </div>
-            )}
-
+        <div className="divide-y divide-border">
+          <Secao titulo="Identificação">
             <div className="space-y-2">
-              <Label htmlFor="champ-name">
-                Nome do Campeonato <span className="text-destructive">*</span>
-              </Label>
-              <Input id="champ-name" placeholder="Ex: Copa da Amizade 2026" className="max-w-lg"
-                value={nome} onChange={e => setNome(e.target.value)} />
+              <Label htmlFor="nome">Nome</Label>
+              <Input id="nome" placeholder="Copa Zona Leste 2026" value={nome} onChange={(e) => setNome(e.target.value)} />
             </div>
+            <div className="grid md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <Label htmlFor="inicio">Início</Label>
+                <Input id="inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fim">Término</Label>
+                <Input id="fim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="desc">Descrição ou regulamento</Label>
+              <textarea
+                id="desc" rows={3}
+                value={descricao} onChange={(e) => setDescricao(e.target.value)}
+                placeholder="Regras específicas, premiação, local"
+                className="w-full rounded-md border border-foreground/15 bg-input-background px-3 py-2 text-sm resize-none outline-none focus:ring-2 focus:ring-ring/50"
+              />
+            </div>
+          </Secao>
 
-            <div className="space-y-3">
-              <Label>
-                Formato <span className="text-destructive">*</span>
-              </Label>
-              <Select value={formato} onValueChange={(v) => setFormato(v as Formato)}>
-                <SelectTrigger className="max-w-lg"><SelectValue /></SelectTrigger>
+          <Secao titulo="Vínculo" ajuda="Liga uma Série A à Série B. Aparece botão de navegação na página pública.">
+            <div className="space-y-2">
+              <Label>Vincular a</Label>
+              <Select value={vinculadoId} onValueChange={setVinculadoId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {FORMATOS.map((f) => (
-                    <SelectItem key={f.value} value={f.value}>
-                      {f.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="nenhum">Sem vínculo</SelectItem>
+                  {outros.map((c) => (<SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground max-w-lg">{opcao.desc}</p>
+            </div>
+          </Secao>
+
+          <Secao titulo="Formato">
+            <div className="space-y-2">
+              <Label>Formato</Label>
+              <Select value={formato} onValueChange={(v) => setFormato(v as Formato)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FORMATOS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{opcao.desc}</p>
             </div>
 
             {opcao.grupos && (
-              <div className="grid grid-cols-2 gap-4 max-w-lg">
+              <div className="grid md:grid-cols-2 gap-5">
                 <div className="space-y-2">
-                  <Label htmlFor="num-grupos" className="text-xs text-muted-foreground font-normal">Nº de grupos</Label>
-                  <Input id="num-grupos" type="number" min={2} max={32}
-                    value={numGrupos} onChange={e => setNumGrupos(Number(e.target.value))} />
+                  <Label htmlFor="num-grupos">Nº de grupos</Label>
+                  <Input id="num-grupos" type="number" min={2} max={32} value={numGrupos} onChange={(e) => setNumGrupos(Number(e.target.value))} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="avancam" className="text-xs text-muted-foreground font-normal">
-                    {formato === 'GRUPOS_MATA_MATA' ? 'Classificados por grupo' : 'Classificados por grupo (só info)'}
-                  </Label>
-                  <Input id="avancam" type="number" min={1} max={10}
-                    value={avancamPorGrupo} onChange={e => setAvancamPorGrupo(Number(e.target.value))} />
+                  <Label htmlFor="avancam">Classificados por grupo</Label>
+                  <Input id="avancam" type="number" min={1} max={10} value={avancamPorGrupo} onChange={(e) => setAvancamPorGrupo(Number(e.target.value))} />
                 </div>
               </div>
             )}
 
             {opcao.temKO && (
-              <div className="space-y-3 max-w-lg">
-                <Label>Mata-mata</Label>
-                <div className="flex items-center gap-2 text-sm text-foreground">
-                  <input id="ida-volta" type="checkbox"
-                    checked={idaVolta} onChange={e => setIdaVolta(e.target.checked)}
-                    className="h-4 w-4 accent-primary" />
-                  <label htmlFor="ida-volta">Ida e volta (agregado)</label>
-                </div>
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={idaVolta} onChange={(e) => setIdaVolta(e.target.checked)} className="rounded border-foreground/20" />
+                  Ida e volta (agregado)
+                </label>
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground font-normal">Resolução de empate</Label>
+                  <Label>Resolução de empate</Label>
                   <Select value={koDesempate} onValueChange={(v) => setKoDesempate(v as KoDesempate)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -214,126 +235,157 @@ export function CreateChampionship() {
             )}
 
             {opcao.playoff && (
-              <div className="space-y-2 max-w-lg">
+              <div className="space-y-2">
                 <Label>Formato do playoff</Label>
                 <Select value={playoffTemplate} onValueChange={(v) => setPlayoffTemplate(v as keyof typeof PLAYOFF_TEMPLATES)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(PLAYOFF_TEMPLATES).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v.label}</SelectItem>
-                    ))}
+                    {Object.entries(PLAYOFF_TEMPLATES).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Config aplicada ao final dos pontos corridos. Edição avançada do bracket virá em breve.
-                </p>
               </div>
             )}
 
             {formato === 'PONTOS_CORRIDOS' && (
-              <div className="flex items-center gap-2 text-sm text-foreground max-w-lg">
-                <input id="ida-volta-pc" type="checkbox"
-                  checked={idaVolta} onChange={e => setIdaVolta(e.target.checked)}
-                  className="h-4 w-4 accent-primary" />
-                <label htmlFor="ida-volta-pc">Turno e returno (ida e volta)</label>
-              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={idaVolta} onChange={(e) => setIdaVolta(e.target.checked)} className="rounded border-foreground/20" />
+                Turno e returno
+              </label>
             )}
+          </Secao>
 
-            <div className="space-y-3 max-w-lg">
-              <Label>Critérios de desempate (ordem de prioridade)</Label>
-              <p className="text-xs text-muted-foreground">
-                Depois dos pontos, aplicamos os critérios na ordem abaixo até definir o desempate.
-              </p>
-              <div className="space-y-1">
-                {criterios.map((c, i) => (
-                  <div key={c} className="flex items-center gap-2 bg-muted/40 border border-border rounded px-3 py-1.5 text-sm">
-                    <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
-                    <span className="text-foreground flex-1">{CRITERIOS_INFO[c]}</span>
-                    <button onClick={() => moverCriterio(i, -1)} disabled={i === 0}
-                      className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30">
-                      <ArrowUp className="w-3 h-3" />
-                    </button>
-                    <button onClick={() => moverCriterio(i, 1)} disabled={i === criterios.length - 1}
-                      className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30">
-                      <ArrowDown className="w-3 h-3" />
-                    </button>
-                    <button onClick={() => toggleCriterio(c)}
-                      className="p-1 text-muted-foreground hover:text-destructive text-xs">
-                      remover
-                    </button>
+          <Secao titulo="Pontuação">
+            <div className="grid grid-cols-2 gap-5 max-w-sm">
+              <div className="space-y-2">
+                <Label htmlFor="pv">Vitória</Label>
+                <Input id="pv" type="number" min={0} max={10} value={pontosVitoria} onChange={(e) => setPontosVitoria(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pe">Empate</Label>
+                <Input id="pe" type="number" min={0} max={10} value={pontosEmpate} onChange={(e) => setPontosEmpate(Number(e.target.value))} />
+              </div>
+            </div>
+          </Secao>
+
+          <Secao titulo="Critérios de desempate" ajuda="Aplicados em ordem depois dos pontos.">
+            <div className="space-y-1.5">
+              {criterios.map((c, i) => (
+                <div key={c} className="flex items-center gap-2 border border-border rounded-md px-3 py-2 text-sm">
+                  <span className="text-xs text-muted-foreground w-5 font-scoreboard">{i + 1}</span>
+                  <span className="flex-1">{CRITERIOS_INFO[c]}</span>
+                  <button onClick={() => moverCriterio(i, -1)} disabled={i === 0} className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"><ArrowUp className="h-3 w-3" /></button>
+                  <button onClick={() => moverCriterio(i, 1)} disabled={i === criterios.length - 1} className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"><ArrowDown className="h-3 w-3" /></button>
+                  <button onClick={() => toggleCriterio(c)} className="p-1 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(CRITERIOS_INFO) as CriterioDesempate[])
+                .filter((c) => !criterios.includes(c))
+                .map((c) => (
+                  <button key={c} onClick={() => toggleCriterio(c)} className="text-xs px-3 py-1.5 rounded-md border border-foreground/15 hover:bg-foreground/5">
+                    + {CRITERIOS_INFO[c]}
+                  </button>
+                ))}
+            </div>
+          </Secao>
+
+          <Secao titulo="Faixas da classificação" ajuda="Cor e legenda ao lado das posições na tabela pública. Ex: verde = acesso, vermelho = rebaixamento.">
+            {faixas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sem faixas configuradas.</p>
+            ) : (
+              <div className="space-y-2">
+                {faixas.map((f, i) => (
+                  <div key={i} className="grid grid-cols-[auto_auto_auto_1fr_auto] items-center gap-3 border border-border rounded-md p-3">
+                    <Select value={f.cor} onValueChange={(v) => updFaixa(i, { cor: v })}>
+                      <SelectTrigger className="w-[140px]">
+                        <span className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: f.cor }} />
+                          {CORES_FAIXA.find((c) => c.hex === f.cor)?.nome ?? 'Cor'}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CORES_FAIXA.map((c) => (
+                          <SelectItem key={c.hex} value={c.hex}>
+                            <span className="flex items-center gap-2">
+                              <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: c.hex }} />
+                              {c.nome}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input type="number" min={1} value={f.posInicio} onChange={(e) => updFaixa(i, { posInicio: Number(e.target.value) })} className="w-16" />
+                    <Input type="number" min={1} value={f.posFim} onChange={(e) => updFaixa(i, { posFim: Number(e.target.value) })} className="w-16" />
+                    <Input placeholder="Ex: Acesso à Série A" value={f.legenda} onChange={(e) => updFaixa(i, { legenda: e.target.value })} />
+                    <button onClick={() => removeFaixa(i)} className="p-2 text-muted-foreground hover:text-destructive"><X className="h-4 w-4" /></button>
                   </div>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {(Object.keys(CRITERIOS_INFO) as CriterioDesempate[])
-                  .filter((c) => !criterios.includes(c))
-                  .map((c) => (
-                    <button key={c} onClick={() => toggleCriterio(c)}
-                      className="text-xs px-2 py-1 rounded border border-border bg-background hover:bg-muted">
-                      + {CRITERIOS_INFO[c]}
-                    </button>
-                  ))}
-              </div>
-            </div>
+            )}
+            <Button variant="outline" size="sm" onClick={addFaixa}><Plus className="h-3.5 w-3.5" /> Adicionar faixa</Button>
+          </Secao>
 
-            <div>
-              <Label className="block mb-3">Datas do Campeonato <span className="text-destructive">*</span></Label>
-              <div className="grid grid-cols-2 gap-4 max-w-lg">
-                <div className="space-y-2">
-                  <Label htmlFor="start-date" className="text-xs text-muted-foreground font-normal">Data de início</Label>
-                  <Input id="start-date" type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
+          <Secao titulo="Times que vão disputar" ajuda="Escolhe aqui os clubes do seu cadastro que entram nesse campeonato. Dá pra inscrever mais depois.">
+            {meusTimes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhum time cadastrado ainda. Você pode criar depois em "Times" e inscrever manualmente.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {timesSelecionados.size} de {meusTimes.length} selecionados
+                  </p>
+                  <div className="flex gap-3 text-xs">
+                    <button type="button" onClick={() => setTimesSelecionados(new Set(meusTimes.map((t) => t.id)))} className="underline text-muted-foreground hover:text-foreground">Selecionar todos</button>
+                    <button type="button" onClick={() => setTimesSelecionados(new Set())} className="underline text-muted-foreground hover:text-foreground">Limpar</button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="end-date" className="text-xs text-muted-foreground font-normal">Data de término</Label>
-                  <Input id="end-date" type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {meusTimes.map((t) => {
+                    const sel = timesSelecionados.has(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => toggleTime(t.id)}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-md border text-left transition ${sel ? 'border-foreground bg-foreground/[0.04]' : 'border-border hover:border-foreground/30'}`}
+                      >
+                        <TeamShield nome={t.nome} cor={t.cor} abreviacao={t.abreviacao} escudoUrl={t.escudoUrl} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm truncate">{t.nome}</p>
+                          {t.cidade && <p className="text-xs text-muted-foreground truncate">{t.cidade}</p>}
+                        </div>
+                        <input type="checkbox" checked={sel} readOnly className="accent-foreground" />
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
-            </div>
+              </>
+            )}
+          </Secao>
+        </div>
 
-            <div>
-              <Label className="block mb-1">Pontuação</Label>
-              <p className="text-xs text-muted-foreground mb-3">Defina quantos pontos cada resultado vale</p>
-              <div className="grid grid-cols-2 gap-4 max-w-xs">
-                <div className="space-y-2">
-                  <Label htmlFor="win-pts" className="text-xs text-muted-foreground font-normal">Vitória</Label>
-                  <Input id="win-pts" type="number" min={0} max={10}
-                    value={pontosVitoria} onChange={e => setPontosVitoria(Number(e.target.value))} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="draw-pts" className="text-xs text-muted-foreground font-normal">Empate</Label>
-                  <Input id="draw-pts" type="number" min={0} max={10}
-                    value={pontosEmpate} onChange={e => setPontosEmpate(Number(e.target.value))} />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="desc">
-                Descrição / Regulamento{' '}
-                <span className="text-muted-foreground text-xs font-normal">(opcional)</span>
-              </Label>
-              <textarea
-                id="desc"
-                rows={4}
-                value={descricao}
-                onChange={e => setDescricao(e.target.value)}
-                placeholder="Adicione regras específicas, informações sobre premiação, local dos jogos..."
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-              <Button variant="outline" onClick={() => navigate('/dashboard')} disabled={loading}>
-                Cancelar
-              </Button>
-              <Button onClick={salvar} disabled={loading} className="gap-2">
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                Salvar Campeonato
-              </Button>
-            </div>
-          </div>
+        <div className="flex items-center justify-end gap-3 pt-10">
+          <Button variant="ghost" onClick={() => navigate('/dashboard')} disabled={loading}>Cancelar</Button>
+          <Button onClick={salvar} disabled={loading}>
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />} Criar campeonato
+          </Button>
         </div>
       </div>
     </OrganizerLayout>
+  );
+}
+
+function Secao({ titulo, ajuda, children }: { titulo: string; ajuda?: string; children: React.ReactNode }) {
+  return (
+    <section className="py-8 space-y-5">
+      <div>
+        <h3 className="font-display text-lg">{titulo}</h3>
+        {ajuda && <p className="text-xs text-muted-foreground mt-1">{ajuda}</p>}
+      </div>
+      {children}
+    </section>
   );
 }

@@ -43,6 +43,40 @@ export interface PlayoffConfig {
   desempate?: KoDesempate;
 }
 
+export interface FaixaTabela {
+  cor: string;
+  posInicio: number;
+  posFim: number;
+  legenda: string;
+}
+
+export type SumulaSecao =
+  | 'arbitragem' | 'escalacao' | 'cronologia'
+  | 'gols' | 'cartoes' | 'placar' | 'observacoes';
+export type CampoCustomTipo = 'texto' | 'numero' | 'boolean';
+export interface CampoCustom { id: string; label: string; tipo: CampoCustomTipo; }
+export interface SumulaConfig {
+  secoes: Partial<Record<SumulaSecao, boolean>>;
+  subsecoes: Record<string, boolean>;
+  camposCustom: CampoCustom[];
+}
+export const SUBSECOES: { secao: SumulaSecao; id: string; label: string }[] = [
+  { secao: 'escalacao',   id: 'titulares',            label: 'Titulares' },
+  { secao: 'escalacao',   id: 'reservas',             label: 'Reservas' },
+  { secao: 'escalacao',   id: 'substituicoes',        label: 'Substituições' },
+  { secao: 'escalacao',   id: 'comissao',             label: 'Comissão técnica' },
+  { secao: 'observacoes', id: 'ocorrencias',          label: 'Ocorrências' },
+  { secao: 'observacoes', id: 'motivoAtraso',         label: 'Motivo de atraso' },
+  { secao: 'observacoes', id: 'observacoesEventuais', label: 'Observações eventuais' },
+  { secao: 'observacoes', id: 'relatorioAssistente',  label: 'Relatório do assistente' },
+  { secao: 'cronologia',  id: 'entradas',             label: 'Entradas em campo' },
+  { secao: 'cronologia',  id: 'tempos',               label: 'Tempos de jogo' },
+];
+export function subLigada(cfg: SumulaConfig | undefined, secao: SumulaSecao, sub: string): boolean {
+  return cfg?.subsecoes?.[`${secao}.${sub}`] !== false;
+}
+export type CampoCustomValor = string | number | boolean | null;
+
 export interface Usuario { id: number; nome: string; email: string; }
 export interface AuthResponse { token: string; usuario: Usuario; }
 
@@ -59,6 +93,8 @@ export interface Campeonato {
   avancamPorGrupo: number | null;
   criteriosDesempate: CriterioDesempate[] | null;
   playoff: PlayoffConfig | null;
+  faixasTabela: FaixaTabela[] | null;
+  campeonatoVinculadoId: number | null;
   dataInicio: string | null;
   dataFim: string | null;
   descricao: string | null;
@@ -72,9 +108,12 @@ export interface CampeonatosResponse {
 }
 
 export interface Time {
-  id: number; campeonatoId: number; nome: string;
+  id: number; usuarioId: number; nome: string;
   cidade: string | null; escudoUrl: string | null;
-  grupoId: number | null;
+  cor: string | null; abreviacao: string | null;
+  // Presentes quando o time vem via listagem de campeonato:
+  grupoId?: number | null;
+  inscricaoId?: number;
 }
 
 export interface Jogador {
@@ -89,7 +128,11 @@ export interface Jogador {
 
 export interface Grupo { id: number; campeonatoId: number; nome: string; times: Time[]; }
 
-export interface TimeResumo { id: number; nome: string; escudoUrl: string | null; }
+export interface TimeResumo {
+  id: number; nome: string; escudoUrl: string | null;
+  cor?: string | null; abreviacao?: string | null;
+}
+export interface CampeonatoVinculo { id: number; nome: string; }
 
 export interface Partida {
   id: number;
@@ -100,6 +143,10 @@ export interface Partida {
   status: StatusPartida;
   dataPartida: string | null;
   local: string | null;
+  transmissao: string | null;
+  camposArbitragemOcultos: string[];
+  camposCustom: Record<string, CampoCustomValor>;
+  campeonatoId: number;
   mandante: TimeResumo | null;
   visitante: TimeResumo | null;
   golsMandante: number | null;
@@ -160,8 +207,16 @@ export interface ObservacoesPartida {
   relatorioAssistente: string | null;
 }
 export interface StatPartida { id: number; timeId: number; chave: ChaveStat; valor: number; }
+export interface ArbitroCampeonato {
+  id: number;
+  email: string;
+  nome: string | null;
+  usuarioId: number | null;
+  status: 'ACEITO' | 'PENDENTE';
+}
 export interface PartidaDetalhe {
   partida: Partida;
+  sumulaConfig: SumulaConfig;
   arbitragem?: Arbitragem;
   cronologia?: Cronologia;
   observacoes?: ObservacoesPartida;
@@ -174,6 +229,7 @@ export interface PartidaDetalhe {
 
 export interface ClassificacaoLinha {
   posicao: number; timeId: number; nome: string; escudoUrl: string | null;
+  cor: string | null; abreviacao: string | null;
   pontos: number; jogos: number; vitorias: number; empates: number; derrotas: number;
   golsPro: number; golsContra: number; saldo: number;
 }
@@ -185,12 +241,17 @@ export interface ClassificacaoGrupo {
 export interface Artilheiro {
   jogadorId: number; jogadorNome: string;
   timeId: number; timeNome: string;
-  escudoUrl: string | null; gols: number;
+  escudoUrl: string | null;
+  cor: string | null; abreviacao: string | null;
+  gols: number;
 }
 
 export interface CampeonatoPublico {
   id: number; nome: string; formato: Formato; status: StatusCampeonato;
   logoUrl: string | null; descricao: string | null;
+  faixasTabela: FaixaTabela[] | null;
+  campeonatoVinculado: CampeonatoVinculo | null;
+  vinculados: CampeonatoVinculo[];
   qtdTimes: number; totalPartidas: number; partidasJogadas: number;
   rodadasTotais: number; rodadasJogadas: number; totalGols: number;
 }
@@ -294,12 +355,22 @@ export const api = {
   listarGrupos: (campeonatoId: number) =>
     request<Grupo[]>(`/campeonatos/${campeonatoId}/grupos`),
 
+  // Lista times inscritos no campeonato (com grupoId e inscricaoId).
   listarTimes: (campeonatoId: number) => request<Time[]>(`/campeonatos/${campeonatoId}/times`),
-  criarTime: (campeonatoId: number, data: { nome: string; cidade?: string; escudoUrl?: string; grupoId?: number | null }) =>
-    request<Time>(`/campeonatos/${campeonatoId}/times`, { method: 'POST', body: body(data) }),
-  atualizarTime: (timeId: number, data: { nome: string; cidade?: string; escudoUrl?: string; grupoId?: number | null }) =>
+  // Cadastro global de times do usuário.
+  listarMeusTimes: () => request<Time[]>(`/times`),
+  criarTime: (data: { nome: string; cidade?: string | null; escudoUrl?: string | null; cor?: string | null; abreviacao?: string | null }) =>
+    request<Time>(`/times`, { method: 'POST', body: body(data) }),
+  atualizarTime: (timeId: number, data: { nome: string; cidade?: string | null; escudoUrl?: string | null; cor?: string | null; abreviacao?: string | null }) =>
     request<Time>(`/times/${timeId}`, { method: 'PUT', body: body(data) }),
   excluirTime: (timeId: number) => request<void>(`/times/${timeId}`, { method: 'DELETE' }),
+  // Inscrever/desinscrever time em campeonato.
+  inscreverTime: (campeonatoId: number, data: { timeId: number; grupoId?: number | null }) =>
+    request<{ id: number; campeonatoId: number; timeId: number; grupoId: number | null }>(
+      `/campeonatos/${campeonatoId}/inscricoes`, { method: 'POST', body: body(data) },
+    ),
+  desinscreverTime: (campeonatoId: number, timeId: number) =>
+    request<void>(`/campeonatos/${campeonatoId}/inscricoes/${timeId}`, { method: 'DELETE' }),
 
   listarJogadores: (timeId: number) => request<Jogador[]>(`/times/${timeId}/jogadores`),
   criarJogador: (timeId: number, data: Partial<Jogador>) =>
@@ -373,6 +444,26 @@ export const api = {
     golsMandanteProrr?: number | null; golsVisitanteProrr?: number | null;
     penaltisMandante?: number | null; penaltisVisitante?: number | null;
   }) => request<PartidaDetalhe>(`/partidas/${partidaId}/placar`, { method: 'PUT', body: body(data) }),
+
+  salvarDadosPartida: (partidaId: number, data: {
+    dataPartida?: string | null;
+    local?: string | null;
+    transmissao?: string | null;
+    camposArbitragemOcultos?: string[];
+    camposCustom?: Record<string, CampoCustomValor>;
+  }) => request<unknown>(`/partidas/${partidaId}/dados`, { method: 'PUT', body: body(data) }),
+
+  obterSumulaConfig: (campeonatoId: number) =>
+    request<SumulaConfig>(`/campeonatos/${campeonatoId}/sumula-config`),
+  salvarSumulaConfig: (campeonatoId: number, data: SumulaConfig) =>
+    request<SumulaConfig>(`/campeonatos/${campeonatoId}/sumula-config`, { method: 'PUT', body: body(data) }),
+
+  listarArbitrosCampeonato: (campeonatoId: number) =>
+    request<ArbitroCampeonato[]>(`/campeonatos/${campeonatoId}/arbitros`),
+  convidarArbitro: (campeonatoId: number, data: { email: string; nome?: string | null }) =>
+    request<ArbitroCampeonato>(`/campeonatos/${campeonatoId}/arbitros`, { method: 'POST', body: body(data) }),
+  removerArbitroCampeonato: (campeonatoId: number, arbitroId: number) =>
+    request<void>(`/campeonatos/${campeonatoId}/arbitros/${arbitroId}`, { method: 'DELETE' }),
 
   publicoListar: () => request<CampeonatoResumoPublico[]>('/public/campeonatos'),
   publicoCampeonato: (id: number) => request<CampeonatoPublico>(`/public/campeonatos/${id}`),

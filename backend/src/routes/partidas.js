@@ -63,3 +63,31 @@ partidasRouter.put(
     res.json(await registrarResultado(id, data));
   }),
 );
+
+const dadosSchema = z.object({
+  dataPartida: z.string().datetime().nullable().optional(),
+  local: z.string().max(200).nullable().optional(),
+  transmissao: z.string().max(500).nullable().optional(),
+  camposArbitragemOcultos: z.array(z.string()).max(20).optional(),
+  camposCustom: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+});
+
+partidasRouter.put(
+  '/:id/dados',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await assertOwnedPartida(req.userId, id);
+    const data = dadosSchema.parse(req.body);
+    const atualizada = await prisma.partida.update({
+      where: { id },
+      data: {
+        dataPartida: data.dataPartida === undefined ? undefined : (data.dataPartida ? new Date(data.dataPartida) : null),
+        local: data.local === undefined ? undefined : data.local,
+        transmissao: data.transmissao === undefined ? undefined : data.transmissao,
+        camposArbitragemOcultos: data.camposArbitragemOcultos === undefined ? undefined : data.camposArbitragemOcultos,
+        camposCustom: data.camposCustom === undefined ? undefined : data.camposCustom,
+      },
+    });
+    res.json(atualizada);
+  }),
+);

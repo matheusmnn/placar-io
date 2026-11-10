@@ -8,11 +8,8 @@ export const timesRouter = Router();
 timesRouter.use(authRequired);
 
 async function getOwnedTime(usuarioId, timeId) {
-  const t = await prisma.time.findUnique({
-    where: { id: timeId },
-    include: { campeonato: { select: { usuarioId: true } } },
-  });
-  if (!t || t.campeonato.usuarioId !== usuarioId) throw notFound('Time não encontrado');
+  const t = await prisma.time.findUnique({ where: { id: timeId } });
+  if (!t || t.usuarioId !== usuarioId) throw notFound('Time não encontrado');
   return t;
 }
 
@@ -20,26 +17,55 @@ const timeSchema = z.object({
   nome: z.string().min(1).max(120),
   cidade: z.string().max(120).nullable().optional(),
   escudoUrl: z.string().url().nullable().optional(),
-  grupoId: z.number().int().nullable().optional(),
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  abreviacao: z.string().max(4).nullable().optional(),
 });
+
+// Lista todos os meus times (cadastro global do usuário).
+timesRouter.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    const lista = await prisma.time.findMany({
+      where: { usuarioId: req.userId },
+      orderBy: { nome: 'asc' },
+    });
+    res.json(lista);
+  }),
+);
+
+// Cria um time no cadastro global do usuário (sem vincular a campeonato).
+timesRouter.post(
+  '/',
+  asyncHandler(async (req, res) => {
+    const data = timeSchema.parse(req.body);
+    const t = await prisma.time.create({
+      data: {
+        usuarioId: req.userId,
+        nome: data.nome.trim(),
+        cidade: data.cidade ?? null,
+        escudoUrl: data.escudoUrl ?? null,
+        cor: data.cor ?? null,
+        abreviacao: data.abreviacao ? data.abreviacao.toUpperCase() : null,
+      },
+    });
+    res.status(201).json(t);
+  }),
+);
 
 timesRouter.put(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const t0 = await getOwnedTime(req.userId, id);
+    await getOwnedTime(req.userId, id);
     const data = timeSchema.parse(req.body);
-    if (data.grupoId != null) {
-      const g = await prisma.grupo.findUnique({ where: { id: data.grupoId } });
-      if (!g || g.campeonatoId !== t0.campeonatoId) throw notFound('Grupo não encontrado neste campeonato');
-    }
     const t = await prisma.time.update({
       where: { id },
       data: {
         nome: data.nome.trim(),
         cidade: data.cidade ?? null,
         escudoUrl: data.escudoUrl ?? null,
-        grupoId: data.grupoId === undefined ? undefined : data.grupoId,
+        cor: data.cor ?? null,
+        abreviacao: data.abreviacao ? data.abreviacao.toUpperCase() : null,
       },
     });
     res.json(t);
