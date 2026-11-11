@@ -142,27 +142,25 @@ function Lista({
       </div>
       <div className="border-y border-border divide-y divide-border">
         {lista.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => abrir(c)}
-            className="group w-full grid grid-cols-[1fr_auto_auto] items-center gap-6 py-4 px-2 -mx-2 text-left hover:bg-foreground/[0.02] transition-colors"
-          >
-            <div className="min-w-0">
+          <div key={c.id} className="group grid grid-cols-[1fr_auto_auto] items-center gap-6 py-4 px-2 -mx-2 hover:bg-foreground/[0.02] transition-colors">
+            <button onClick={() => abrir(c)} className="min-w-0 text-left cursor-pointer">
               <p className="font-display text-lg leading-tight truncate">{c.nome}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 <span className="font-scoreboard">{c.qtdTimes}</span> times · {statusLabel[c.status]} · {/* eslint-disable-next-line */}
                 {['EM_ANDAMENTO', 'ENCERRADO', 'NAO_INICIADO'].includes(c.status) && formatoLabel[c.formato]}
               </p>
-            </div>
-            <ArrowUpRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />
-            <span
+            </button>
+            <button onClick={() => abrir(c)} className="text-muted-foreground group-hover:text-foreground cursor-pointer" title="Abrir">
+              <ArrowUpRight className="h-4 w-4" />
+            </button>
+            <button
               onClick={(e) => excluir(c, e)}
-              className="p-1.5 text-muted-foreground hover:text-destructive cursor-pointer rounded-md"
+              className="p-1.5 text-muted-foreground hover:text-destructive rounded-md"
               title="Excluir"
             >
               <Trash2 className="h-3.5 w-3.5" />
-            </span>
-          </button>
+            </button>
+          </div>
         ))}
       </div>
     </section>
