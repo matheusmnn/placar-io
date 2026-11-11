@@ -382,6 +382,24 @@ export const api = {
   gerarRodadas: (campeonatoId: number) =>
     request<Rodada[]>(`/campeonatos/${campeonatoId}/gerar-rodadas`, { method: 'POST' }),
   listarPartidas: (campeonatoId: number) => request<Rodada[]>(`/campeonatos/${campeonatoId}/partidas`),
+  criarPartida: (campeonatoId: number, data: {
+    mandanteId: number; visitanteId: number; rodada: number; dataPartida?: string | null;
+  }) => request<Partida>(`/campeonatos/${campeonatoId}/partidas`, { method: 'POST', body: body(data) }),
+  atualizarPartida: (partidaId: number, data: {
+    mandanteId?: number; visitanteId?: number; rodada?: number;
+  }) => request<Partida>(`/partidas/${partidaId}`, { method: 'PATCH', body: body(data) }),
+  removerPartida: (partidaId: number) => request<void>(`/partidas/${partidaId}`, { method: 'DELETE' }),
+  clonarRodadaVolta: (campeonatoId: number, rodada: number) =>
+    request<{ rodada: number; criadas: number }>(
+      `/campeonatos/${campeonatoId}/rodadas/${rodada}/clonar-volta`, { method: 'POST' }),
+  sortearRestoRodada: (campeonatoId: number, rodada: number, data?: { reset?: boolean }) =>
+    request<{ criadas: number; sobra: number }>(
+      `/campeonatos/${campeonatoId}/rodadas/${rodada}/sortear-resto`,
+      { method: 'POST', body: body(data ?? {}) }),
+  sortearTudo: (campeonatoId: number, data?: { reset?: boolean }) =>
+    request<{ criadas: number }>(`/campeonatos/${campeonatoId}/sortear-tudo`, {
+      method: 'POST', body: body(data ?? {}),
+    }),
   obterPartida: (partidaId: number) => request<PartidaDetalhe>(`/partidas/${partidaId}`),
   registrarResultado: (partidaId: number, data: {
     golsMandante: number; golsVisitante: number;

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ExternalLink, Loader2, MoreHorizontal, Plus, Shuffle, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Checkbox } from '../ui/checkbox';
+import { Input } from '../ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { OrganizerLayout } from '../OrganizerLayout';
 import { TeamShield } from '../TeamShield';
-import { api, ApiError, Partida, Rodada } from '../../lib/api';
+import { api, ApiError, Campeonato, Partida, Rodada, Time } from '../../lib/api';
 import { campeonatoAtivo, partidaAtiva } from '../../lib/session';
 
 function formatarDataHora(iso: string | null): string {
@@ -18,15 +21,42 @@ function formatarDataHora(iso: string | null): string {
   return `${diaCap}, ${data} · ${hora}`;
 }
 
+function isoParaLocal(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function RoundsMatches() {
   const navigate = useNavigate();
   const ativo = campeonatoAtivo.get();
 
+  const [camp, setCamp] = useState<Campeonato | null>(null);
   const [rodadas, setRodadas] = useState<Rodada[]>([]);
+  const [times, setTimes] = useState<Time[]>([]);
   const [loading, setLoading] = useState(true);
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
+  const [addRodada, setAddRodada] = useState<number | null>(null);
+  const [sorteio, setSorteio] = useState<{ tipo: 'tudo' | 'rodada'; rodada?: number } | null>(null);
+
+  const editavel = camp?.formato === 'PONTOS_CORRIDOS';
+
+  function timesOcupados(rodada: number, excetoPartidaId?: number): Set<number> {
+    const s = new Set<number>();
+    for (const r of rodadas) {
+      for (const p of r.partidas) {
+        if (p.rodada !== rodada) continue;
+        if (p.id === excetoPartidaId) continue;
+        if (p.mandante?.id) s.add(p.mandante.id);
+        if (p.visitante?.id) s.add(p.visitante.id);
+      }
+    }
+    return s;
+  }
 
   useEffect(() => {
     if (!ativo) { navigate('/dashboard'); return; }
@@ -38,8 +68,14 @@ export function RoundsMatches() {
     if (!ativo) return;
     setLoading(true);
     try {
-      const r = await api.listarPartidas(ativo.id);
+      const [c, r, t] = await Promise.all([
+        api.obterCampeonato(ativo.id),
+        api.listarPartidas(ativo.id),
+        api.listarTimes(ativo.id),
+      ]);
+      setCamp(c);
       setRodadas(r);
+      setTimes(t);
       const aberta = r.findIndex((rd) => rd.partidas.some((p) => p.status !== 'CONCLUIDA'));
       setIdx(Math.max(0, aberta));
     } finally {
@@ -66,12 +102,64 @@ export function RoundsMatches() {
     navigate('/dashboard/resultado');
   }
 
+  function atualizarPartida(id: number, patch: Partial<Partida>) {
+    setRodadas((rs) =>
+      rs.map((r) => ({
+        ...r,
+        partidas: r.partidas.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+      })),
+    );
+  }
+
+  async function removerPartida(p: Partida) {
+    if (!confirm('Remover esta partida?')) return;
+    try {
+      await api.removerPartida(p.id);
+      await carregar();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível remover');
+    }
+  }
+
+  async function clonarVolta(rodada: number) {
+    if (!ativo) return;
+    try {
+      const r = await api.clonarRodadaVolta(ativo.id, rodada);
+      await carregar();
+      setIdx((cur) => Math.min(cur, r.rodada - 1));
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível clonar a rodada');
+    }
+  }
+
+  async function confirmarSorteio(manter: boolean) {
+    if (!ativo || !sorteio) return;
+    setErro(null);
+    try {
+      if (sorteio.tipo === 'tudo') {
+        await api.sortearTudo(ativo.id, { reset: !manter });
+      } else if (sorteio.rodada != null) {
+        await api.sortearRestoRodada(ativo.id, sorteio.rodada, { reset: !manter });
+      }
+      setSorteio(null);
+      await carregar();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Falha ao sortear');
+    }
+  }
+
+
+  const maxRodada = useMemo(
+    () => rodadas.reduce((m, r) => Math.max(m, ...r.partidas.map((p) => p.rodada)), 0),
+    [rodadas],
+  );
   const total = useMemo(() => rodadas.reduce((a, r) => a + r.partidas.length, 0), [rodadas]);
   const feitas = useMemo(
     () => rodadas.reduce((a, r) => a + r.partidas.filter((p) => p.status === 'CONCLUIDA').length, 0),
     [rodadas],
   );
   const atual = rodadas[idx];
+  const rodadaAtualNumero = atual?.partidas[0]?.rodada ?? idx + 1;
 
   return (
     <OrganizerLayout>
@@ -81,11 +169,18 @@ export function RoundsMatches() {
             <p className="text-sm text-muted-foreground">{ativo?.nome}</p>
             <h1 className="font-display text-4xl mt-2">Rodadas</h1>
           </div>
-          {ativo && (
-            <Button size="sm" variant="outline" onClick={() => navigate(`/campeonato/${ativo.id}`)}>
-              <ExternalLink className="h-3.5 w-3.5" /> Ver público
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {editavel && rodadas.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => setSorteio({ tipo: 'tudo' })}>
+                <Shuffle className="h-3.5 w-3.5" /> Sortear tudo
+              </Button>
+            )}
+            {ativo && (
+              <Button size="sm" variant="outline" onClick={() => navigate(`/campeonato/${ativo.id}`)}>
+                <ExternalLink className="h-3.5 w-3.5" /> Ver público
+              </Button>
+            )}
+          </div>
         </div>
 
         {erro && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive mb-6">{erro}</div>}
@@ -94,15 +189,23 @@ export function RoundsMatches() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-10"><Loader2 className="h-4 w-4 animate-spin" /> Carregando</div>
         ) : rodadas.length === 0 ? (
           <div className="border border-dashed border-foreground/15 rounded-md p-12 text-center">
-            <p className="font-display text-xl mb-2">Nenhuma rodada gerada</p>
-            <p className="text-sm text-muted-foreground mb-5">Cadastra os times e a gente monta a tabela de jogos.</p>
-            <Button onClick={gerar} disabled={gerando}>
-              {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Gerar rodadas
-            </Button>
+            <p className="font-display text-xl mb-2">Nenhuma rodada ainda</p>
+            <p className="text-sm text-muted-foreground mb-5">
+              {editavel ? 'Gera a tabela automaticamente ou monta rodada por rodada.' : 'Cadastra os times e a gente monta a tabela de jogos.'}
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <Button onClick={gerar} disabled={gerando}>
+                {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Gerar rodadas
+              </Button>
+              {editavel && (
+                <Button variant="outline" onClick={() => setAddRodada(1)}>
+                  <Plus className="h-4 w-4" /> Criar manualmente
+                </Button>
+              )}
+            </div>
           </div>
         ) : (
           <>
-            {/* Barra de rodada */}
             <div className="flex items-center justify-between border-y border-border py-5 mb-8">
               <button
                 onClick={() => setIdx(Math.max(0, idx - 1))}
@@ -130,14 +233,46 @@ export function RoundsMatches() {
               </button>
             </div>
 
-            {atual && (
-              <div className="divide-y divide-border border-y border-border">
-                <ListaPartidasAdmin partidas={atual.partidas} onAbrir={abrirSumula} />
+            {editavel && atual && (
+              <div className="flex items-center gap-2 mb-3 text-xs">
+                <Button size="sm" variant="outline" onClick={() => setAddRodada(rodadaAtualNumero)}>
+                  <Plus className="h-3.5 w-3.5" /> Adicionar partida
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSorteio({ tipo: 'rodada', rodada: rodadaAtualNumero })}
+                >
+                  <Shuffle className="h-3.5 w-3.5" /> Sortear rodada
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={atual.partidas.length === 0}
+                  onClick={() => clonarVolta(rodadaAtualNumero)}
+                  title="Cria uma nova rodada ao final com os mesmos confrontos invertidos"
+                >
+                  Duplicar como volta
+                </Button>
               </div>
             )}
 
-            {/* navegador de rodadas em miniatura */}
-            <div className="mt-8 flex flex-wrap gap-1">
+            {atual && (
+              <div className="divide-y divide-border border-y border-border">
+                <ListaPartidasAdmin
+                  partidas={atual.partidas}
+                  onAbrir={abrirSumula}
+                  onAtualizar={atualizarPartida}
+                  editavel={!!editavel}
+                  times={times}
+                  timesOcupados={timesOcupados}
+                  onRemover={removerPartida}
+                  onRecarregar={carregar}
+                />
+              </div>
+            )}
+
+            <div className="mt-8 flex flex-wrap items-center gap-1">
               {rodadas.map((r, i) => {
                 const t = r.partidas.length;
                 const f = r.partidas.filter((p) => p.status === 'CONCLUIDA').length;
@@ -158,18 +293,89 @@ export function RoundsMatches() {
                   </button>
                 );
               })}
+              {editavel && (
+                <button
+                  onClick={() => setAddRodada(maxRodada + 1)}
+                  className="h-8 w-8 rounded-sm border border-dashed border-foreground/30 text-foreground/50 hover:border-foreground/60 hover:text-foreground flex items-center justify-center"
+                  title="Nova rodada"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              )}
             </div>
           </>
+        )}
+
+        {sorteio && (
+          <SortearDialog
+            tipo={sorteio.tipo}
+            rodada={sorteio.rodada}
+            personalizadas={
+              sorteio.tipo === 'tudo'
+                ? rodadas.flatMap((r) => r.partidas).filter((p) => p.status === 'AGENDADA').length
+                : (rodadas.flatMap((r) => r.partidas).filter((p) => p.rodada === sorteio.rodada && p.status === 'AGENDADA').length)
+            }
+            onConfirmar={confirmarSorteio}
+            onFechar={() => setSorteio(null)}
+          />
+        )}
+
+        {addRodada != null && ativo && (
+          <AdicionarPartidaDialog
+            campeonatoId={ativo.id}
+            rodadaInicial={addRodada}
+            times={times}
+            timesOcupados={timesOcupados}
+            onFechar={() => setAddRodada(null)}
+            onCriada={async (rodada) => {
+              setAddRodada(null);
+              await carregar();
+              setRodadas((rs) => {
+                const i = rs.findIndex((r) => r.partidas[0]?.rodada === rodada);
+                if (i >= 0) setIdx(i);
+                return rs;
+              });
+            }}
+          />
         )}
       </div>
     </OrganizerLayout>
   );
 }
 
-function ListaPartidasAdmin({ partidas, onAbrir }: { partidas: Partida[]; onAbrir: (p: Partida) => void }) {
+type TimesOcupadosFn = (rodada: number, excetoPartidaId?: number) => Set<number>;
+
+type ListaProps = {
+  partidas: Partida[];
+  onAbrir: (p: Partida) => void;
+  onAtualizar: (id: number, patch: Partial<Partida>) => void;
+  editavel: boolean;
+  times: Time[];
+  timesOcupados: TimesOcupadosFn;
+  onRemover: (p: Partida) => void;
+  onRecarregar: () => Promise<void>;
+};
+
+function ListaPartidasAdmin({ partidas, onAbrir, onAtualizar, editavel, times, timesOcupados, onRemover, onRecarregar }: ListaProps) {
   const temLegs = partidas.some((p) => p.legOrdem != null);
   if (!temLegs) {
-    return <>{partidas.map((p) => <LinhaPartida key={p.id} partida={p} onClick={() => onAbrir(p)} />)}</>;
+    return (
+      <>
+        {partidas.map((p) => (
+          <LinhaPartida
+            key={p.id}
+            partida={p}
+            onAbrir={() => onAbrir(p)}
+            onAtualizar={onAtualizar}
+            editavel={editavel}
+            times={times}
+            timesOcupados={timesOcupados}
+            onRemover={() => onRemover(p)}
+            onRecarregar={onRecarregar}
+          />
+        ))}
+      </>
+    );
   }
   const pares = new Map<number, { ida?: Partida; volta?: Partida }>();
   for (const p of partidas) {
@@ -187,41 +393,346 @@ function ListaPartidasAdmin({ partidas, onAbrir }: { partidas: Partida[]; onAbri
       </div>
       {[...pares.entries()].sort(([a], [b]) => a - b).map(([k, p]) => (
         <div key={k} className="grid grid-cols-2 divide-x divide-border">
-          <div>{p.ida ? <LinhaPartida partida={p.ida} onClick={() => onAbrir(p.ida!)} /> : vazio}</div>
-          <div>{p.volta ? <LinhaPartida partida={p.volta} onClick={() => onAbrir(p.volta!)} /> : vazio}</div>
+          <div>{p.ida ? <LinhaPartida partida={p.ida} onAbrir={() => onAbrir(p.ida!)} onAtualizar={onAtualizar} editavel={false} times={times} timesOcupados={timesOcupados} onRemover={() => onRemover(p.ida!)} onRecarregar={onRecarregar} /> : vazio}</div>
+          <div>{p.volta ? <LinhaPartida partida={p.volta} onAbrir={() => onAbrir(p.volta!)} onAtualizar={onAtualizar} editavel={false} times={times} timesOcupados={timesOcupados} onRemover={() => onRemover(p.volta!)} onRecarregar={onRecarregar} /> : vazio}</div>
         </div>
       ))}
     </>
   );
 }
 
-function LinhaPartida({ partida, onClick }: { partida: Partida; onClick: () => void }) {
+type LinhaProps = {
+  partida: Partida;
+  onAbrir: () => void;
+  onAtualizar: (id: number, patch: Partial<Partida>) => void;
+  editavel: boolean;
+  times: Time[];
+  timesOcupados: TimesOcupadosFn;
+  onRemover: () => void;
+  onRecarregar: () => Promise<void>;
+};
+
+function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, times, timesOcupados, onRemover, onRecarregar }: LinhaProps) {
   const concluida = partida.status === 'CONCLUIDA';
   const emAndamento = partida.status === 'EM_ANDAMENTO';
+  const podeEditar = editavel && partida.status === 'AGENDADA';
   return (
-    <button onClick={onClick} className="group w-full grid grid-cols-[1fr_auto_1fr_auto] items-center gap-6 py-4 px-2 -mx-2 text-left hover:bg-foreground/[0.02] transition-colors">
-      <div className="flex items-center gap-3 justify-end text-right min-w-0">
-        <span className="text-sm truncate">{partida.mandante?.nome ?? 'A definir'}</span>
-        <TeamShield nome={partida.mandante?.nome} cor={partida.mandante?.cor} abreviacao={partida.mandante?.abreviacao} escudoUrl={partida.mandante?.escudoUrl ?? null} size="sm" />
-      </div>
-      <div className="w-24 text-center">
-        {concluida && partida.golsMandante != null ? (
-          <p className="font-scoreboard text-2xl">
-            {partida.golsMandante} <span className="text-muted-foreground">–</span> {partida.golsVisitante}
-          </p>
-        ) : (
-          <p className="text-muted-foreground text-sm">×</p>
-        )}
-      </div>
-      <div className="flex items-center gap-3 min-w-0">
-        <TeamShield nome={partida.visitante?.nome} cor={partida.visitante?.cor} abreviacao={partida.visitante?.abreviacao} escudoUrl={partida.visitante?.escudoUrl ?? null} size="sm" />
-        <span className="text-sm truncate">{partida.visitante?.nome ?? 'A definir'}</span>
-      </div>
+    <div className="group w-full grid grid-cols-[1fr_auto_1fr_auto_auto] items-center gap-6 py-4 px-2 -mx-2 hover:bg-foreground/[0.02] transition-colors">
+      <button onClick={onAbrir} className="contents text-left cursor-pointer">
+        <div className="flex items-center gap-3 justify-end text-right min-w-0">
+          <span className="text-sm truncate">{partida.mandante?.nome ?? 'A definir'}</span>
+          <TeamShield nome={partida.mandante?.nome} cor={partida.mandante?.cor} abreviacao={partida.mandante?.abreviacao} escudoUrl={partida.mandante?.escudoUrl ?? null} size="sm" />
+        </div>
+        <div className="w-24 text-center">
+          {concluida && partida.golsMandante != null ? (
+            <p className="font-scoreboard text-2xl">
+              {partida.golsMandante} <span className="text-muted-foreground">–</span> {partida.golsVisitante}
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-sm">×</p>
+          )}
+        </div>
+        <div className="flex items-center gap-3 min-w-0">
+          <TeamShield nome={partida.visitante?.nome} cor={partida.visitante?.cor} abreviacao={partida.visitante?.abreviacao} escudoUrl={partida.visitante?.escudoUrl ?? null} size="sm" />
+          <span className="text-sm truncate">{partida.visitante?.nome ?? 'A definir'}</span>
+        </div>
+      </button>
       <div className="text-right text-xs text-muted-foreground min-w-[140px]">
-        <p>{formatarDataHora(partida.dataPartida)}</p>
+        <EditorDataHora partida={partida} onAtualizar={onAtualizar} />
         {partida.local && <p>{partida.local}</p>}
         {emAndamento && <p className="text-brand mt-1">súmula aberta</p>}
       </div>
-    </button>
+      {podeEditar ? (
+        <MenuPartida partida={partida} times={times} timesOcupados={timesOcupados} onRemover={onRemover} onRecarregar={onRecarregar} />
+      ) : (
+        <div className="w-8" />
+      )}
+    </div>
+  );
+}
+
+function MenuPartida({ partida, times, timesOcupados, onRemover, onRecarregar }: { partida: Partida; times: Time[]; timesOcupados: TimesOcupadosFn; onRemover: () => void; onRecarregar: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [mandanteId, setMandanteId] = useState<number>(partida.mandante?.id ?? 0);
+  const [visitanteId, setVisitanteId] = useState<number>(partida.visitante?.id ?? 0);
+  const [rodada, setRodada] = useState<number>(partida.rodada);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const ocupados = timesOcupados(rodada, partida.id);
+
+  async function salvar() {
+    setErro(null);
+    setSalvando(true);
+    try {
+      await api.atualizarPartida(partida.id, { mandanteId, visitanteId, rodada });
+      await onRecarregar();
+      setOpen(false);
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Falha ao salvar');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) {
+          setMandanteId(partida.mandante?.id ?? 0);
+          setVisitanteId(partida.visitante?.id ?? 0);
+          setRodada(partida.rodada);
+          setErro(null);
+        }
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button className="h-8 w-8 rounded-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground flex items-center justify-center" title="Editar partida">
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-3 space-y-3">
+        <div className="space-y-1">
+          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Mandante</label>
+          <select
+            value={mandanteId}
+            onChange={(e) => setMandanteId(Number(e.target.value))}
+            className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+          >
+            <option value={0} disabled>Selecione</option>
+            {times.map((t) => <option key={t.id} value={t.id} disabled={t.id === visitanteId || (ocupados.has(t.id) && t.id !== mandanteId)}>{t.nome}</option>)}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Visitante</label>
+          <select
+            value={visitanteId}
+            onChange={(e) => setVisitanteId(Number(e.target.value))}
+            className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+          >
+            <option value={0} disabled>Selecione</option>
+            {times.map((t) => <option key={t.id} value={t.id} disabled={t.id === mandanteId || (ocupados.has(t.id) && t.id !== visitanteId)}>{t.nome}</option>)}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Rodada</label>
+          <Input type="number" min={1} value={rodada} onChange={(e) => setRodada(Number(e.target.value))} />
+        </div>
+        {erro && <p className="text-xs text-destructive">{erro}</p>}
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { setOpen(false); onRemover(); }}>
+            <Trash2 className="h-3.5 w-3.5" /> Remover
+          </Button>
+          <Button size="sm" disabled={salvando || !mandanteId || !visitanteId || mandanteId === visitanteId} onClick={salvar}>
+            {salvando ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar'}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function AdicionarPartidaDialog({
+  campeonatoId,
+  rodadaInicial,
+  times,
+  timesOcupados,
+  onFechar,
+  onCriada,
+}: {
+  campeonatoId: number;
+  rodadaInicial: number;
+  times: Time[];
+  timesOcupados: TimesOcupadosFn;
+  onFechar: () => void;
+  onCriada: (rodada: number) => Promise<void>;
+}) {
+  const [mandanteId, setMandanteId] = useState<number>(0);
+  const [visitanteId, setVisitanteId] = useState<number>(0);
+  const [rodada, setRodada] = useState<number>(rodadaInicial);
+  const [data, setData] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const ocupados = timesOcupados(rodada);
+
+  async function salvar() {
+    setErro(null);
+    setSalvando(true);
+    try {
+      await api.criarPartida(campeonatoId, {
+        mandanteId,
+        visitanteId,
+        rodada,
+        dataPartida: data ? new Date(data).toISOString() : null,
+      });
+      await onCriada(rodada);
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Falha ao criar partida');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onFechar}>
+      <div className="bg-card border border-border rounded-lg p-6 w-full max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-display text-xl">Adicionar partida</h2>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Mandante</label>
+            <select
+              value={mandanteId}
+              onChange={(e) => setMandanteId(Number(e.target.value))}
+              className="w-full h-10 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value={0} disabled>Selecione</option>
+              {times.map((t) => <option key={t.id} value={t.id} disabled={t.id === visitanteId || ocupados.has(t.id)}>{t.nome}{ocupados.has(t.id) ? ' (já joga nessa rodada)' : ''}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Visitante</label>
+            <select
+              value={visitanteId}
+              onChange={(e) => setVisitanteId(Number(e.target.value))}
+              className="w-full h-10 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value={0} disabled>Selecione</option>
+              {times.map((t) => <option key={t.id} value={t.id} disabled={t.id === mandanteId || ocupados.has(t.id)}>{t.nome}{ocupados.has(t.id) ? ' (já joga nessa rodada)' : ''}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Rodada</label>
+            <Input type="number" min={1} value={rodada} onChange={(e) => setRodada(Number(e.target.value))} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Data (opcional)</label>
+            <Input type="datetime-local" value={data} onChange={(e) => setData(e.target.value)} />
+          </div>
+        </div>
+
+        {erro && <p className="text-xs text-destructive">{erro}</p>}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onFechar}>Cancelar</Button>
+          <Button
+            disabled={salvando || !mandanteId || !visitanteId || mandanteId === visitanteId || rodada < 1}
+            onClick={salvar}
+          >
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Adicionar'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SortearDialog({
+  tipo,
+  rodada,
+  personalizadas,
+  onConfirmar,
+  onFechar,
+}: {
+  tipo: 'tudo' | 'rodada';
+  rodada?: number;
+  personalizadas: number;
+  onConfirmar: (manter: boolean) => Promise<void>;
+  onFechar: () => void;
+}) {
+  const [manter, setManter] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const titulo = tipo === 'tudo' ? 'Sortear tudo' : `Sortear rodada ${rodada}`;
+  const descricao = tipo === 'tudo'
+    ? 'Preenche os confrontos que faltam em todo o campeonato.'
+    : `Preenche os confrontos que faltam na rodada ${rodada}.`;
+
+  async function go() {
+    setSalvando(true);
+    try { await onConfirmar(manter); } finally { setSalvando(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onFechar}>
+      <div className="bg-card border border-border rounded-lg p-6 w-full max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-display text-xl">{titulo}</h2>
+        <p className="text-sm text-muted-foreground">{descricao}</p>
+
+        {personalizadas > 0 ? (
+          <label className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer">
+            <Checkbox checked={manter} onCheckedChange={(v) => setManter(v === true)} className="mt-0.5" />
+            <span className="text-sm">
+              Manter jogos personalizados
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                {personalizadas} partida{personalizadas > 1 ? 's' : ''} criada{personalizadas > 1 ? 's' : ''} manualmente. Desmarque para apagar e sortear tudo do zero.
+              </span>
+            </span>
+          </label>
+        ) : (
+          <p className="text-xs text-muted-foreground">Nada personalizado por enquanto — vai sortear tudo do zero.</p>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onFechar} disabled={salvando}>Cancelar</Button>
+          <Button onClick={go} disabled={salvando}>
+            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sortear'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditorDataHora({ partida, onAtualizar }: { partida: Partida; onAtualizar: (id: number, patch: Partial<Partida>) => void }) {
+  const [open, setOpen] = useState(false);
+  const [valor, setValor] = useState(() => isoParaLocal(partida.dataPartida));
+  const [salvando, setSalvando] = useState(false);
+  const concluida = partida.status === 'CONCLUIDA';
+
+  async function salvar(novo: string | null) {
+    setSalvando(true);
+    try {
+      await api.salvarDadosPartida(partida.id, { dataPartida: novo });
+      onAtualizar(partida.id, { dataPartida: novo });
+      setOpen(false);
+    } catch {
+      // mantém popover aberto; usuário vê que não fechou
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (concluida) {
+    return <p>{formatarDataHora(partida.dataPartida)}</p>;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setValor(isoParaLocal(partida.dataPartida)); }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded px-1 -mx-1 hover:bg-foreground/5 hover:text-foreground"
+        >
+          <CalendarIcon className="h-3 w-3" />
+          <span>{formatarDataHora(partida.dataPartida)}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-3 space-y-2">
+        <p className="text-xs text-muted-foreground">Data e horário da partida</p>
+        <Input type="datetime-local" value={valor} onChange={(e) => setValor(e.target.value)} />
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <Button size="sm" variant="ghost" disabled={salvando || !partida.dataPartida} onClick={() => salvar(null)}>
+            Limpar
+          </Button>
+          <Button size="sm" disabled={salvando || !valor} onClick={() => salvar(new Date(valor).toISOString())}>
+            {salvando ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar'}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
