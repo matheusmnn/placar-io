@@ -495,7 +495,13 @@ export async function listarRodadas(campeonatoId) {
   if (!c) throw badRequest('Campeonato não encontrado');
   const partidas = await prisma.partida.findMany({
     where: { campeonatoId },
-    orderBy: [{ rodada: 'asc' }, { ordemFase: 'asc' }, { legOrdem: 'asc' }, { id: 'asc' }],
+    orderBy: [
+      { rodada: 'asc' },
+      { dataPartida: { sort: 'asc', nulls: 'last' } },
+      { ordemFase: 'asc' },
+      { legOrdem: 'asc' },
+      { id: 'asc' },
+    ],
     include: {
       mandante: { select: { id: true, nome: true, escudoUrl: true, cor: true, abreviacao: true } },
       visitante: { select: { id: true, nome: true, escudoUrl: true, cor: true, abreviacao: true } },

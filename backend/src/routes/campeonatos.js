@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authRequired } from '../middleware/auth.js';
-import { asyncHandler, notFound } from '../lib/http.js';
+import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { gerarRodadas, listarRodadas } from '../services/partida.js';
 
 export const campeonatosRouter = Router();
@@ -346,6 +346,199 @@ campeonatosRouter.get(
     const id = Number(req.params.id);
     await getOwned(req.userId, id);
     res.json(await listarRodadas(id));
+  }),
+);
+
+const FORMATOS_PARTIDA_MANUAL = new Set(['PONTOS_CORRIDOS']);
+
+function assertFormatoManual(c) {
+  if (!FORMATOS_PARTIDA_MANUAL.has(c.formato)) {
+    throw badRequest('Edição manual de rodadas disponível só em pontos corridos');
+  }
+}
+
+async function assertAmbosInscritos(campeonatoId, mandanteId, visitanteId) {
+  if (mandanteId === visitanteId) throw badRequest('Mandante e visitante devem ser diferentes');
+  const inscritas = await prisma.inscricaoCampeonato.count({
+    where: { campeonatoId, timeId: { in: [mandanteId, visitanteId] } },
+  });
+  if (inscritas !== 2) throw badRequest('Time não inscrito neste campeonato');
+}
+
+const partidaManualSchema = z.object({
+  mandanteId: z.number().int().positive(),
+  visitanteId: z.number().int().positive(),
+  rodada: z.number().int().min(1).max(500),
+  dataPartida: z.string().datetime().nullable().optional(),
+});
+
+campeonatosRouter.post(
+  '/:id/partidas',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const c = await getOwned(req.userId, id);
+    assertFormatoManual(c);
+    const data = partidaManualSchema.parse(req.body);
+    await assertAmbosInscritos(id, data.mandanteId, data.visitanteId);
+    const criada = await prisma.partida.create({
+      data: {
+        campeonatoId: id,
+        mandanteId: data.mandanteId,
+        visitanteId: data.visitanteId,
+        rodada: data.rodada,
+        dataPartida: data.dataPartida ? new Date(data.dataPartida) : null,
+      },
+    });
+    res.status(201).json(criada);
+  }),
+);
+
+campeonatosRouter.post(
+  '/:id/rodadas/:n/clonar-volta',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const n = Number(req.params.n);
+    const c = await getOwned(req.userId, id);
+    assertFormatoManual(c);
+    const inscritos = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
+    if (inscritos < 2) throw badRequest('Precisa de pelo menos 2 times inscritos');
+    const origem = await prisma.partida.findMany({
+      where: { campeonatoId: id, rodada: n, grupoId: null, fase: null },
+    });
+    if (origem.length === 0) throw badRequest('Rodada vazia, nada para clonar');
+    const destino = n + (inscritos - 1);
+    const conflito = await prisma.partida.findFirst({
+      where: {
+        campeonatoId: id, rodada: destino, grupoId: null, fase: null,
+        OR: origem.flatMap((p) => [
+          { mandanteId: { in: [p.mandanteId, p.visitanteId].filter((x) => x != null) } },
+          { visitanteId: { in: [p.mandanteId, p.visitanteId].filter((x) => x != null) } },
+        ]),
+      },
+    });
+    if (conflito) throw badRequest(`A rodada ${destino} já tem um time que jogaria na volta. Limpe-a antes de duplicar.`);
+    await prisma.partida.createMany({
+      data: origem.map((p) => ({
+        campeonatoId: id,
+        mandanteId: p.visitanteId,
+        visitanteId: p.mandanteId,
+        rodada: destino,
+      })),
+    });
+    res.status(201).json({ rodada: destino, criadas: origem.length });
+  }),
+);
+
+const sortearSchema = z.object({ reset: z.boolean().optional() });
+
+campeonatosRouter.post(
+  '/:id/sortear-tudo',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const c = await getOwned(req.userId, id);
+    assertFormatoManual(c);
+    const { reset } = sortearSchema.parse(req.body ?? {});
+    const inscritos = await prisma.inscricaoCampeonato.findMany({
+      where: { campeonatoId: id }, select: { timeId: true },
+    });
+    const timeIds = inscritos.map((i) => i.timeId);
+    if (timeIds.length < 2) throw badRequest('Precisa de pelo menos 2 times inscritos');
+
+    if (reset) {
+      await prisma.partida.deleteMany({
+        where: { campeonatoId: id, status: 'AGENDADA', grupoId: null, fase: null },
+      });
+    }
+
+    const existentes = await prisma.partida.findMany({
+      where: { campeonatoId: id, grupoId: null, fase: null },
+      select: { mandanteId: true, visitanteId: true, rodada: true },
+    });
+
+    const parKey = (a, b) => `${Math.min(a, b)}-${Math.max(a, b)}`;
+    const cobertos = new Set();
+    const ocup = new Map();
+    let maxRodada = 0;
+    for (const p of existentes) {
+      if (p.mandanteId && p.visitanteId) cobertos.add(parKey(p.mandanteId, p.visitanteId));
+      if (!ocup.has(p.rodada)) ocup.set(p.rodada, new Set());
+      const s = ocup.get(p.rodada);
+      if (p.mandanteId) s.add(p.mandanteId);
+      if (p.visitanteId) s.add(p.visitanteId);
+      if (p.rodada > maxRodada) maxRodada = p.rodada;
+    }
+
+    const pendentes = [];
+    for (let i = 0; i < timeIds.length; i++) {
+      for (let j = i + 1; j < timeIds.length; j++) {
+        if (!cobertos.has(parKey(timeIds[i], timeIds[j]))) {
+          const mand = Math.random() < 0.5 ? timeIds[i] : timeIds[j];
+          const vis = mand === timeIds[i] ? timeIds[j] : timeIds[i];
+          pendentes.push({ mandanteId: mand, visitanteId: vis });
+        }
+      }
+    }
+    if (pendentes.length === 0) throw badRequest('Todos os confrontos já estão criados');
+    for (let i = pendentes.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pendentes[i], pendentes[j]] = [pendentes[j], pendentes[i]];
+    }
+
+    let teto = Math.max(maxRodada, timeIds.length - 1);
+    for (let r = 1; r <= teto; r++) if (!ocup.has(r)) ocup.set(r, new Set());
+
+    const criar = [];
+    for (const par of pendentes) {
+      let rod = null;
+      for (let r = 1; r <= teto; r++) {
+        const s = ocup.get(r);
+        if (!s.has(par.mandanteId) && !s.has(par.visitanteId)) { rod = r; break; }
+      }
+      if (rod == null) { teto++; rod = teto; ocup.set(rod, new Set()); }
+      const s = ocup.get(rod);
+      s.add(par.mandanteId);
+      s.add(par.visitanteId);
+      criar.push({ campeonatoId: id, rodada: rod, mandanteId: par.mandanteId, visitanteId: par.visitanteId });
+    }
+
+    await prisma.partida.createMany({ data: criar });
+    res.status(201).json({ criadas: criar.length });
+  }),
+);
+
+campeonatosRouter.post(
+  '/:id/rodadas/:n/sortear-resto',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const n = Number(req.params.n);
+    const c = await getOwned(req.userId, id);
+    assertFormatoManual(c);
+    const { reset } = sortearSchema.parse(req.body ?? {});
+    const inscritos = await prisma.inscricaoCampeonato.findMany({
+      where: { campeonatoId: id }, select: { timeId: true },
+    });
+    if (reset) {
+      await prisma.partida.deleteMany({
+        where: { campeonatoId: id, rodada: n, status: 'AGENDADA', grupoId: null, fase: null },
+      });
+    }
+    const existentes = await prisma.partida.findMany({
+      where: { campeonatoId: id, rodada: n }, select: { mandanteId: true, visitanteId: true },
+    });
+    const ocupados = new Set();
+    for (const p of existentes) { if (p.mandanteId) ocupados.add(p.mandanteId); if (p.visitanteId) ocupados.add(p.visitanteId); }
+    const livres = inscritos.map((i) => i.timeId).filter((t) => !ocupados.has(t));
+    for (let i = livres.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [livres[i], livres[j]] = [livres[j], livres[i]];
+    }
+    const pares = [];
+    for (let i = 0; i + 1 < livres.length; i += 2) {
+      pares.push({ campeonatoId: id, rodada: n, mandanteId: livres[i], visitanteId: livres[i + 1] });
+    }
+    if (pares.length === 0) throw badRequest('Não há times livres suficientes para sortear');
+    await prisma.partida.createMany({ data: pares });
+    res.status(201).json({ criadas: pares.length, sobra: livres.length - pares.length * 2 });
   }),
 );
 

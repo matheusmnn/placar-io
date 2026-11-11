@@ -4,17 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
+    "start": "prisma migrate deploy && node src/index.js",
+    "dev": "node --env-file=.env --watch src/index.js",
     "test": "node --test src/**/*.test.js",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "postinstall": "prisma generate",
+    "migrate:dev": "node --env-file=.env ./node_modules/.bin/prisma migrate dev",
+    "migrate:reset": "node --env-file=.env ./node_modules/.bin/prisma migrate reset",
+    "studio": "node --env-file=.env ./node_modules/.bin/prisma studio"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^4.21.1",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "pino": "^9.5.0",
     "pino-http": "^10.3.0",

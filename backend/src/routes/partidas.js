@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authRequired } from '../middleware/auth.js';
-import { asyncHandler, notFound } from '../lib/http.js';
+import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { detalhe, registrarResultado } from '../services/partida.js';
 
 export const partidasRouter = Router();
@@ -14,6 +14,16 @@ async function assertOwnedPartida(usuarioId, partidaId) {
     include: { campeonato: { select: { usuarioId: true } } },
   });
   if (!p || p.campeonato.usuarioId !== usuarioId) throw notFound('Partida não encontrada');
+  return p;
+}
+
+async function assertTimesInscritos(campeonatoId, ...timeIds) {
+  const ids = timeIds.filter((id) => id != null);
+  if (new Set(ids).size !== ids.length) throw badRequest('Mandante e visitante devem ser times diferentes');
+  const inscritas = await prisma.inscricaoCampeonato.count({
+    where: { campeonatoId, timeId: { in: ids } },
+  });
+  if (inscritas !== ids.length) throw badRequest('Time não inscrito neste campeonato');
 }
 
 const resultadoSchema = z.object({
@@ -71,6 +81,47 @@ const dadosSchema = z.object({
   camposArbitragemOcultos: z.array(z.string()).max(20).optional(),
   camposCustom: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 });
+
+const patchSchema = z.object({
+  mandanteId: z.number().int().positive().optional(),
+  visitanteId: z.number().int().positive().optional(),
+  rodada: z.number().int().min(1).max(500).optional(),
+});
+
+partidasRouter.patch(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const atual = await assertOwnedPartida(req.userId, id);
+    if (atual.status !== 'AGENDADA') throw badRequest('Só partidas agendadas podem ser editadas');
+    if (atual.grupoId != null || atual.fase != null) throw badRequest('Partida de grupo/fase não pode ser editada manualmente');
+    const data = patchSchema.parse(req.body);
+    const mandanteId = data.mandanteId ?? atual.mandanteId;
+    const visitanteId = data.visitanteId ?? atual.visitanteId;
+    await assertTimesInscritos(atual.campeonatoId, mandanteId, visitanteId);
+    const atualizada = await prisma.partida.update({
+      where: { id },
+      data: {
+        mandanteId: data.mandanteId ?? undefined,
+        visitanteId: data.visitanteId ?? undefined,
+        rodada: data.rodada ?? undefined,
+      },
+    });
+    res.json(atualizada);
+  }),
+);
+
+partidasRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const atual = await assertOwnedPartida(req.userId, id);
+    if (atual.status !== 'AGENDADA') throw badRequest('Só partidas agendadas podem ser removidas');
+    if (atual.grupoId != null || atual.fase != null) throw badRequest('Partida de grupo/fase não pode ser removida manualmente');
+    await prisma.partida.delete({ where: { id } });
+    res.status(204).end();
+  }),
+);
 
 partidasRouter.put(
   '/:id/dados',
