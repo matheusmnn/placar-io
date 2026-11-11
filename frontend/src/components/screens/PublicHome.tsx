@@ -97,7 +97,7 @@ export function PublicHome() {
             Monta a chave, abre a súmula no celular no dia do jogo, fecha e manda o link pro grupo do WhatsApp ver a classificação.
           </p>
           <div className="mt-8 flex items-center gap-4">
-            <Button size="lg" onClick={() => navigate('/cadastro')}>Criar meu campeonato</Button>
+            <Button size="lg" onClick={() => navigate(isLogged ? '/dashboard/novo' : '/cadastro')}>Criar meu campeonato</Button>
             <a href="#campeonatos" className="text-sm font-medium inline-flex items-center gap-1 hover:text-brand">
               Ver exemplo <ArrowRight className="h-4 w-4" />
             </a>
@@ -195,8 +195,10 @@ export function PublicHome() {
             Criação rápida e com todos os recursos pra gerenciar seu campeonato.
           </p>
           <div className="mt-8 flex items-center justify-center gap-4">
-            <Button size="lg" onClick={() => navigate('/cadastro')}>Criar meu campeonato</Button>
-            <Button size="lg" variant="outline" onClick={() => navigate('/login')}>Já tenho conta</Button>
+            <Button size="lg" onClick={() => navigate(isLogged ? '/dashboard/novo' : '/cadastro')}>Criar meu campeonato</Button>
+            {!isLogged && (
+              <Button size="lg" variant="outline" onClick={() => navigate('/login')}>Já tenho conta</Button>
+            )}
           </div>
         </div>
       </section>
