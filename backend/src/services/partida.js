@@ -404,6 +404,7 @@ async function verificarAvancoPlayoff(camp) {
   // Fase regular (pontos corridos): só gera playoff quando todas acabarem.
   const partidasPC = await prisma.partida.findMany({
     where: { campeonatoId: camp.id, grupoId: null, fase: null },
+    include: { cartoes: { select: { timeId: true, tipo: true } } },
   });
   if (partidasPC.length === 0) return;
   if (!partidasPC.every((p) => p.status === 'CONCLUIDA')) return;
@@ -445,6 +446,7 @@ async function verificarAvancoGrupos(camp) {
   // grupos estiverem concluídas.
   const partidasGrupo = await prisma.partida.findMany({
     where: { campeonatoId: camp.id, NOT: { grupoId: null } },
+    include: { cartoes: { select: { timeId: true, tipo: true } } },
   });
   if (partidasGrupo.length === 0) return;
   if (!partidasGrupo.every((p) => p.status === 'CONCLUIDA')) return;

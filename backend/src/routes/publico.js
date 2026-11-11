@@ -84,7 +84,10 @@ publicoRouter.get(
       orderBy: { time: { nome: 'asc' } },
     });
     const times = inscr.map((i) => i.time);
-    const partidas = await prisma.partida.findMany({ where: { campeonatoId: id } });
+    const partidas = await prisma.partida.findMany({
+      where: { campeonatoId: id },
+      include: { cartoes: { select: { timeId: true, tipo: true } } },
+    });
     res.json(calcular(times, partidas, c.pontosVitoria, c.pontosEmpate, c.criteriosDesempate));
   }),
 );
@@ -101,6 +104,7 @@ publicoRouter.get(
     });
     const partidasGrupo = await prisma.partida.findMany({
       where: { campeonatoId: id, NOT: { grupoId: null } },
+      include: { cartoes: { select: { timeId: true, tipo: true } } },
     });
     res.json(
       grupos.map((g) => ({

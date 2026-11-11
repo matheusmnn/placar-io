@@ -14,6 +14,9 @@ const CRITERIOS_INFO: Record<CriterioDesempate, string> = {
   golsPro: 'Gols pró',
   golsContra: 'Menos gols sofridos',
   vitorias: 'Mais vitórias',
+  confrontoDireto: 'Confronto direto',
+  cartoesVermelhos: 'Menos cartões vermelhos',
+  cartoesAmarelos: 'Menos cartões amarelos',
   sorteio: 'Sorteio',
 };
 const CRITERIOS_PADRAO: CriterioDesempate[] = ['saldo', 'golsPro'];

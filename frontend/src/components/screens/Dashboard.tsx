@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowUpRight, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { OrganizerLayout } from '../OrganizerLayout';
 import { api, Campeonato, CampeonatosResponse, Formato, StatusCampeonato } from '../../lib/api';
 import { campeonatoAtivo } from '../../lib/session';
@@ -25,6 +26,7 @@ export function Dashboard() {
   const [data, setData] = useState<CampeonatosResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [busca, setBusca] = useState('');
 
   async function carregar() {
     setLoading(true);
@@ -66,9 +68,15 @@ export function Dashboard() {
     return new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
   }, []);
 
-  const emAndamento = campeonatos.filter((c) => c.status === 'EM_ANDAMENTO');
-  const rascunhos = campeonatos.filter((c) => c.status === 'NAO_INICIADO');
-  const encerrados = campeonatos.filter((c) => c.status === 'ENCERRADO');
+  const filtrados = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return campeonatos;
+    return campeonatos.filter((c) => c.nome.toLowerCase().includes(q));
+  }, [campeonatos, busca]);
+
+  const emAndamento = filtrados.filter((c) => c.status === 'EM_ANDAMENTO');
+  const rascunhos = filtrados.filter((c) => c.status === 'NAO_INICIADO');
+  const encerrados = filtrados.filter((c) => c.status === 'ENCERRADO');
 
   return (
     <OrganizerLayout>
@@ -99,6 +107,15 @@ export function Dashboard() {
           </div>
         ) : (
           <div className="space-y-12">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="pl-9"
+              />
+            </div>
             {/* Resumo em números, sem card decorativo */}
             <div className="grid grid-cols-3 border-t border-b border-border divide-x divide-border">
               <Figura rotulo="Em andamento" valor={emAndamento.length} destaque />

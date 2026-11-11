@@ -7,7 +7,7 @@ import { gerarRodadas, listarRodadas } from '../services/partida.js';
 
 export const campeonatosRouter = Router();
 
-const CRITERIOS = ['saldo', 'golsPro', 'golsContra', 'vitorias', 'sorteio'];
+const CRITERIOS = ['saldo', 'golsPro', 'golsContra', 'vitorias', 'confrontoDireto', 'cartoesVermelhos', 'cartoesAmarelos', 'sorteio'];
 
 const playoffSchema = z.object({
   posicoes: z.array(z.number().int().min(1)).min(2),

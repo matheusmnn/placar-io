@@ -33,7 +33,7 @@ export type ChaveStat =
   | 'FALTAS'
   | 'IMPEDIMENTOS'
   | 'POSSE';
-export type CriterioDesempate = 'saldo' | 'golsPro' | 'golsContra' | 'vitorias' | 'sorteio';
+export type CriterioDesempate = 'saldo' | 'golsPro' | 'golsContra' | 'vitorias' | 'confrontoDireto' | 'cartoesVermelhos' | 'cartoesAmarelos' | 'sorteio';
 
 export interface PlayoffConfig {
   posicoes: number[];
