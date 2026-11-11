@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, Loader2, Plus, Trash2, UserCircle } from 'lucide-react';
+import { ChevronLeft, Loader2, Plus, Search, Trash2, UserCircle } from 'lucide-react';
 import { Button } from '../ui/button';
+import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { OrganizerLayout } from '../OrganizerLayout';
@@ -32,7 +33,8 @@ export function RegisterTeams() {
   const [cor, setCor] = useState(CORES[0]);
   const [escudoUrl, setEscudoUrl] = useState('');
   const [inscricaoGrupoId, setInscricaoGrupoId] = useState<number | null>(null);
-  const [timeParaInscrever, setTimeParaInscrever] = useState<number | ''>('');
+  const [busca, setBusca] = useState('');
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -90,19 +92,42 @@ export function RegisterTeams() {
   }
 
   async function inscrever() {
-    if (!ativo || timeParaInscrever === '') return;
+    if (!ativo || selecionados.size === 0) return;
     if (temGrupos && inscricaoGrupoId == null) { setErro('Selecione o grupo'); return; }
+    setErro(null);
     setSalvando(true);
     try {
-      await api.inscreverTime(ativo.id, {
-        timeId: Number(timeParaInscrever),
-        grupoId: temGrupos ? inscricaoGrupoId : null,
-      });
-      setTimeParaInscrever('');
+      for (const timeId of selecionados) {
+        await api.inscreverTime(ativo.id, {
+          timeId,
+          grupoId: temGrupos ? inscricaoGrupoId : null,
+        });
+      }
+      setSelecionados(new Set());
+      setBusca('');
       carregar();
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Não foi possível inscrever');
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível inscrever um dos times');
+      carregar();
     } finally { setSalvando(false); }
+  }
+
+  const filtradosInscrever = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return naoInscritos;
+    return naoInscritos.filter((t) =>
+      t.nome.toLowerCase().includes(q) ||
+      (t.cidade?.toLowerCase().includes(q) ?? false) ||
+      (t.abreviacao?.toLowerCase().includes(q) ?? false),
+    );
+  }, [naoInscritos, busca]);
+
+  function alternarSelecao(id: number) {
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   async function desinscrever(t: Time) {
@@ -151,36 +176,63 @@ export function RegisterTeams() {
               <span className="text-xs text-muted-foreground font-scoreboard">{inscritos.length}</span>
             </div>
 
-            <div className="grid md:grid-cols-[1fr_auto_auto] gap-3 items-end">
-              <div className="space-y-2">
-                <Label>Inscrever time já cadastrado</Label>
-                <select
-                  value={timeParaInscrever === '' ? '' : String(timeParaInscrever)}
-                  onChange={(e) => setTimeParaInscrever(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full h-10 rounded-md border border-foreground/15 bg-input-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/50"
-                  disabled={naoInscritos.length === 0}
-                >
-                  <option value="">{naoInscritos.length === 0 ? 'Todos os meus times já estão inscritos' : 'Selecione um time'}</option>
-                  {naoInscritos.map((t) => (
-                    <option key={t.id} value={t.id}>{t.nome}{t.cidade ? ` — ${t.cidade}` : ''}</option>
-                  ))}
-                </select>
+            <div className="space-y-3">
+              <div className="flex items-end gap-3 flex-wrap">
+                <div className="flex-1 min-w-[240px] space-y-2">
+                  <Label>Inscrever times já cadastrados</Label>
+                  <div className="relative">
+                    <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={busca}
+                      onChange={(e) => setBusca(e.target.value)}
+                      placeholder={naoInscritos.length === 0 ? 'Todos os meus times já estão inscritos' : 'Buscar por nome, cidade ou sigla'}
+                      disabled={naoInscritos.length === 0}
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                {temGrupos && (
+                  <div className="space-y-2">
+                    <Label>Grupo</Label>
+                    <select
+                      value={inscricaoGrupoId ?? ''}
+                      onChange={(e) => setInscricaoGrupoId(e.target.value === '' ? null : Number(e.target.value))}
+                      className="h-10 rounded-md border border-foreground/15 bg-input-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/50"
+                    >
+                      {grupos.map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
+                    </select>
+                  </div>
+                )}
+                <Button onClick={inscrever} disabled={salvando || selecionados.size === 0}>
+                  {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Inscrever {selecionados.size > 0 && `(${selecionados.size})`}
+                </Button>
               </div>
-              {temGrupos && (
-                <div className="space-y-2">
-                  <Label>Grupo</Label>
-                  <select
-                    value={inscricaoGrupoId ?? ''}
-                    onChange={(e) => setInscricaoGrupoId(e.target.value === '' ? null : Number(e.target.value))}
-                    className="h-10 rounded-md border border-foreground/15 bg-input-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/50"
-                  >
-                    {grupos.map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
-                  </select>
+
+              {naoInscritos.length > 0 && (
+                <div className="max-h-72 overflow-y-auto border border-border rounded-md divide-y divide-border">
+                  {filtradosInscrever.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-3">Nenhum time encontrado.</p>
+                  ) : (
+                    filtradosInscrever.map((t) => {
+                      const marcado = selecionados.has(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className="flex items-center gap-3 py-2.5 px-3 cursor-pointer hover:bg-foreground/[0.02]"
+                        >
+                          <Checkbox checked={marcado} onCheckedChange={() => alternarSelecao(t.id)} />
+                          <TeamShield nome={t.nome} cor={t.cor} abreviacao={t.abreviacao} escudoUrl={t.escudoUrl} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm truncate">{t.nome}</p>
+                            <p className="text-xs text-muted-foreground truncate">{t.cidade ?? '—'}</p>
+                          </div>
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
               )}
-              <Button onClick={inscrever} disabled={salvando || timeParaInscrever === ''}>
-                <Plus className="h-4 w-4" /> Inscrever
-              </Button>
             </div>
 
             {loading ? (
