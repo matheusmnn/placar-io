@@ -87,6 +87,7 @@ model Usuario {
   nome                 String
   email                String            @unique
   senhaHash            String
+  isSuperAdmin         Boolean           @default(false)
   createdAt            DateTime          @default(now())
   campeonatos          Campeonato[]
   times                Time[]

@@ -29,7 +29,7 @@ authRouter.post(
     });
     res.status(201).json({
       token: sign(usuario.id),
-      usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email },
+      usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, isSuperAdmin: usuario.isSuperAdmin },
     });
   }),
 );
@@ -42,7 +42,7 @@ authRouter.post(
     if (!u || !(await compare(senha, u.senhaHash))) throw unauthorized('Credenciais inválidas');
     res.json({
       token: sign(u.id),
-      usuario: { id: u.id, nome: u.nome, email: u.email },
+      usuario: { id: u.id, nome: u.nome, email: u.email, isSuperAdmin: u.isSuperAdmin },
     });
   }),
 );

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authRequired } from '../middleware/auth.js';
-import { asyncHandler, badRequest, notFound } from '../lib/http.js';
+import { asyncHandler, badRequest, conflict, notFound } from '../lib/http.js';
 import { gerarRodadas, listarRodadas } from '../services/partida.js';
 
 export const campeonatosRouter = Router();
@@ -41,8 +41,8 @@ const campeonatoSchema = z.object({
   playoff: playoffSchema.nullable().optional(),
   faixasTabela: z.array(faixaTabelaSchema).max(20).nullable().optional(),
   campeonatoVinculadoId: z.number().int().positive().nullable().optional(),
-  dataInicio: z.string().datetime().nullable().optional(),
-  dataFim: z.string().datetime().nullable().optional(),
+  dataInicio: z.string().date().nullable().optional(),
+  dataFim: z.string().date().nullable().optional(),
   descricao: z.string().nullable().optional(),
   logoUrl: z.string().url().nullable().optional(),
 });
@@ -72,9 +72,12 @@ function toCampDto(c, qtdTimes) {
 }
 
 async function getOwned(usuarioId, id) {
-  const c = await prisma.campeonato.findFirst({ where: { id, usuarioId } });
+  const c = await prisma.campeonato.findUnique({ where: { id } });
   if (!c) throw notFound('Campeonato não encontrado');
-  return c;
+  if (c.usuarioId === usuarioId) return c;
+  const u = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { isSuperAdmin: true } });
+  if (u?.isSuperAdmin) return c;
+  throw notFound('Campeonato não encontrado');
 }
 
 async function resolverVinculo(usuarioId, vinculadoId, selfId) {
@@ -90,8 +93,9 @@ campeonatosRouter.use(authRequired);
 campeonatosRouter.get(
   '/',
   asyncHandler(async (req, res) => {
+    const u = await prisma.usuario.findUnique({ where: { id: req.userId }, select: { isSuperAdmin: true } });
     const lista = await prisma.campeonato.findMany({
-      where: { usuarioId: req.userId },
+      where: u?.isSuperAdmin ? {} : { usuarioId: req.userId },
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { inscricoes: true } } },
     });
@@ -160,12 +164,20 @@ campeonatosRouter.put(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    const atual = await getOwned(req.userId, id);
+    if (atual.status !== 'NAO_INICIADO') throw conflict('Campeonato já iniciado — não pode ser editado');
+    const temPartida = await prisma.partida.findFirst({ where: { campeonatoId: id }, select: { id: true } });
+    if (temPartida) throw conflict('Remova as partidas geradas antes de editar o campeonato');
+
     const data = campeonatoSchema.parse(req.body);
     const vinculadoId =
       data.campeonatoVinculadoId === undefined
         ? undefined
         : await resolverVinculo(req.userId, data.campeonatoVinculadoId, id);
+    const novoFormato = data.formato ?? atual.formato;
+    const temGrupos = novoFormato === 'GRUPOS' || novoFormato === 'GRUPOS_MATA_MATA';
+    const novoNumGrupos = temGrupos ? (data.numGrupos ?? atual.numGrupos ?? 2) : null;
+
     const c = await prisma.campeonato.update({
       where: { id },
       data: {
@@ -175,7 +187,8 @@ campeonatosRouter.put(
         pontosEmpate: data.pontosEmpate ?? undefined,
         idaVolta: data.idaVolta ?? undefined,
         koDesempate: data.koDesempate ?? undefined,
-        avancamPorGrupo: data.avancamPorGrupo ?? undefined,
+        numGrupos: novoNumGrupos,
+        avancamPorGrupo: temGrupos ? (data.avancamPorGrupo ?? atual.avancamPorGrupo ?? 2) : null,
         criteriosDesempate: data.criteriosDesempate === undefined ? undefined : data.criteriosDesempate,
         playoff: data.playoff === undefined ? undefined : data.playoff,
         faixasTabela: data.faixasTabela === undefined ? undefined : data.faixasTabela,
@@ -186,6 +199,15 @@ campeonatosRouter.put(
         logoUrl: data.logoUrl ?? null,
       },
     });
+
+    if (temGrupos && novoNumGrupos !== atual.numGrupos) {
+      await prisma.grupo.deleteMany({ where: { campeonatoId: id } });
+      const nomes = Array.from({ length: novoNumGrupos }, (_, i) => String.fromCharCode(65 + i));
+      await prisma.grupo.createMany({ data: nomes.map((nome) => ({ campeonatoId: id, nome })) });
+    } else if (!temGrupos && atual.numGrupos != null) {
+      await prisma.grupo.deleteMany({ where: { campeonatoId: id } });
+    }
+
     const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
     res.json(toCampDto(c, qtdTimes));
   }),

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ArrowUpRight, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { OrganizerLayout } from '../OrganizerLayout';
 import { api, Campeonato, CampeonatosResponse, Formato, StatusCampeonato } from '../../lib/api';
@@ -106,9 +106,9 @@ export function Dashboard() {
               <Figura rotulo="Encerrados" valor={encerrados.length} />
             </div>
 
-            <Lista titulo="Em andamento" lista={emAndamento} abrir={abrir} excluir={excluir} />
-            <Lista titulo="Rascunhos" lista={rascunhos} abrir={abrir} excluir={excluir} />
-            <Lista titulo="Encerrados" lista={encerrados} abrir={abrir} excluir={excluir} />
+            <Lista titulo="Em andamento" lista={emAndamento} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
+            <Lista titulo="Rascunhos" lista={rascunhos} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
+            <Lista titulo="Encerrados" lista={encerrados} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
           </div>
         )}
       </div>
@@ -126,12 +126,13 @@ function Figura({ rotulo, valor, destaque }: { rotulo: string; valor: number; de
 }
 
 function Lista({
-  titulo, lista, abrir, excluir,
+  titulo, lista, abrir, excluir, editar,
 }: {
   titulo: string;
   lista: Campeonato[];
   abrir: (c: Campeonato) => void;
   excluir: (c: Campeonato, e: React.MouseEvent) => void;
+  editar: (c: Campeonato) => void;
 }) {
   if (lista.length === 0) return null;
   return (
@@ -142,7 +143,7 @@ function Lista({
       </div>
       <div className="border-y border-border divide-y divide-border">
         {lista.map((c) => (
-          <div key={c.id} className="group grid grid-cols-[1fr_auto_auto] items-center gap-6 py-4 px-2 -mx-2 hover:bg-foreground/[0.02] transition-colors">
+          <div key={c.id} className="group grid grid-cols-[1fr_auto_auto_auto] items-center gap-6 py-4 px-2 -mx-2 hover:bg-foreground/[0.02] transition-colors">
             <button onClick={() => abrir(c)} className="min-w-0 text-left cursor-pointer">
               <p className="font-display text-lg leading-tight truncate">{c.nome}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -153,6 +154,15 @@ function Lista({
             <button onClick={() => abrir(c)} className="text-muted-foreground group-hover:text-foreground cursor-pointer" title="Abrir">
               <ArrowUpRight className="h-4 w-4" />
             </button>
+            {c.status === 'NAO_INICIADO' ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); editar(c); }}
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded-md"
+                title="Editar"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            ) : <span />}
             <button
               onClick={(e) => excluir(c, e)}
               className="p-1.5 text-muted-foreground hover:text-destructive rounded-md"

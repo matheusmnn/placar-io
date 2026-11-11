@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { ArrowDown, ArrowUp, ChevronLeft, Loader2, Plus, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -54,6 +54,9 @@ const CORES_FAIXA = [
 
 export function CreateChampionship() {
   const navigate = useNavigate();
+  const { id: idParam } = useParams<{ id?: string }>();
+  const editandoId = idParam ? Number(idParam) : null;
+  const editando = editandoId !== null;
   const [formato, setFormato] = useState<Formato>('PONTOS_CORRIDOS');
   const [nome, setNome] = useState('');
   const [dataInicio, setDataInicio] = useState('');
@@ -78,7 +81,30 @@ export function CreateChampionship() {
   useEffect(() => {
     api.listarCampeonatos().then((r) => setOutros(r.campeonatos)).catch(() => setOutros([]));
     api.listarMeusTimes().then(setMeusTimes).catch(() => setMeusTimes([]));
-  }, []);
+    if (editandoId !== null) {
+      api.obterCampeonato(editandoId).then((c) => {
+        setNome(c.nome);
+        setFormato(c.formato);
+        setPontosVitoria(c.pontosVitoria);
+        setPontosEmpate(c.pontosEmpate);
+        setIdaVolta(c.idaVolta);
+        setKoDesempate(c.koDesempate);
+        if (c.numGrupos) setNumGrupos(c.numGrupos);
+        if (c.avancamPorGrupo) setAvancamPorGrupo(c.avancamPorGrupo);
+        if (c.criteriosDesempate && c.criteriosDesempate.length > 0) setCriterios(c.criteriosDesempate);
+        if (c.playoff) {
+          const match = (Object.keys(PLAYOFF_TEMPLATES) as (keyof typeof PLAYOFF_TEMPLATES)[])
+            .find((k) => JSON.stringify(PLAYOFF_TEMPLATES[k].cfg) === JSON.stringify(c.playoff));
+          if (match) setPlayoffTemplate(match);
+        }
+        setDescricao(c.descricao ?? '');
+        setDataInicio(c.dataInicio ? c.dataInicio.slice(0, 10) : '');
+        setDataFim(c.dataFim ? c.dataFim.slice(0, 10) : '');
+        setVinculadoId(c.campeonatoVinculadoId != null ? String(c.campeonatoVinculadoId) : 'nenhum');
+        setFaixas(c.faixasTabela ?? []);
+      }).catch(() => setErro('Não foi possível carregar o campeonato'));
+    }
+  }, [editandoId]);
 
   function toggleTime(id: number) {
     const next = new Set(timesSelecionados);
@@ -113,7 +139,7 @@ export function CreateChampionship() {
     }
     setLoading(true);
     try {
-      const campCriado = await api.criarCampeonato({
+      const payload = {
         nome: nome.trim(),
         formato,
         pontosVitoria,
@@ -129,9 +155,14 @@ export function CreateChampionship() {
         descricao: descricao || null,
         faixasTabela: faixas.length > 0 ? faixas : null,
         campeonatoVinculadoId: vinculadoId !== 'nenhum' ? Number(vinculadoId) : null,
-      });
-      for (const timeId of timesSelecionados) {
-        try { await api.inscreverTime(campCriado.id, { timeId }); } catch { /* segue — usuário pode inscrever depois */ }
+      };
+      if (editandoId !== null) {
+        await api.atualizarCampeonato(editandoId, payload);
+      } else {
+        const campCriado = await api.criarCampeonato(payload);
+        for (const timeId of timesSelecionados) {
+          try { await api.inscreverTime(campCriado.id, { timeId }); } catch { /* segue — usuário pode inscrever depois */ }
+        }
       }
       navigate('/dashboard');
     } catch (err) {
@@ -146,7 +177,7 @@ export function CreateChampionship() {
           <ChevronLeft className="h-4 w-4" /> Painel
         </button>
 
-        <h1 className="font-display text-4xl mb-10">Novo campeonato</h1>
+        <h1 className="font-display text-4xl mb-10">{editando ? 'Editar campeonato' : 'Novo campeonato'}</h1>
 
         {erro && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive mb-6">{erro}</div>}
 
@@ -326,7 +357,7 @@ export function CreateChampionship() {
             <Button variant="outline" size="sm" onClick={addFaixa}><Plus className="h-3.5 w-3.5" /> Adicionar faixa</Button>
           </Secao>
 
-          <Secao titulo="Times que vão disputar" ajuda="Escolhe aqui os clubes do seu cadastro que entram nesse campeonato. Dá pra inscrever mais depois.">
+          {!editando && <Secao titulo="Times que vão disputar" ajuda="Escolhe aqui os clubes do seu cadastro que entram nesse campeonato. Dá pra inscrever mais depois.">
             {meusTimes.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nenhum time cadastrado ainda. Você pode criar depois em "Times" e inscrever manualmente.
@@ -364,13 +395,13 @@ export function CreateChampionship() {
                 </div>
               </>
             )}
-          </Secao>
+          </Secao>}
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-10">
           <Button variant="ghost" onClick={() => navigate('/dashboard')} disabled={loading}>Cancelar</Button>
           <Button onClick={salvar} disabled={loading}>
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />} Criar campeonato
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />} {editando ? 'Salvar alterações' : 'Criar campeonato'}
           </Button>
         </div>
       </div>

@@ -77,7 +77,7 @@ export function subLigada(cfg: SumulaConfig | undefined, secao: SumulaSecao, sub
 }
 export type CampoCustomValor = string | number | boolean | null;
 
-export interface Usuario { id: number; nome: string; email: string; }
+export interface Usuario { id: number; nome: string; email: string; isSuperAdmin?: boolean; }
 export interface AuthResponse { token: string; usuario: Usuario; }
 
 export interface Campeonato {

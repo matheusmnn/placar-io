@@ -29,6 +29,7 @@ export default function App() {
           <Route path="/cadastro" element={<Register />} />
           <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
           <Route path="/dashboard/novo" element={<Protected><CreateChampionship /></Protected>} />
+          <Route path="/dashboard/editar/:id" element={<Protected><CreateChampionship /></Protected>} />
           <Route path="/dashboard/times" element={<Protected><RegisterTeams /></Protected>} />
           <Route path="/dashboard/jogadores" element={<Protected><RegisterPlayers /></Protected>} />
           <Route path="/dashboard/rodadas" element={<Protected><RoundsMatches /></Protected>} />
