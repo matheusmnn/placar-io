@@ -704,8 +704,11 @@ campeonatosRouter.post(
     const camp = await getCamp(req.userId, id, 'coAdms');
     const data = convidarCoAdmSchema.parse(req.body);
     const chave = data.identificador.toLowerCase();
-    const alvo = await prisma.usuario.findUnique({
-      where: chave.includes('@') ? { email: chave } : { username: chave },
+    // Email no DB pode estar em mixed-case (register não normaliza); username é sempre lowercase.
+    const alvo = await prisma.usuario.findFirst({
+      where: chave.includes('@')
+        ? { email: { equals: chave, mode: 'insensitive' } }
+        : { username: chave },
       select: { id: true, username: true, nome: true, email: true },
     });
     if (!alvo) throw notFound('Usuário não encontrado');
