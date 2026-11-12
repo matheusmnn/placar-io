@@ -18,3 +18,7 @@
 
 # Instruções locais pro Claude Code
 CLAUDE.md
+
+# Docs locais (specs/plans, notas) e scratch do Superpowers
+docs/
+.superpowers/
