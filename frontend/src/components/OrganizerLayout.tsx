@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Trophy, Users, UserCircle, Calendar, ClipboardList, ChevronsUpDown, LogOut } from 'lucide-react';
+import { LayoutDashboard, Trophy, Users, UserCircle, Calendar, ClipboardList, ChevronsUpDown, LogOut, UsersRound } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../lib/useAuth';
 import { campeonatoAtivo } from '../lib/session';
@@ -32,6 +32,7 @@ const menuItems: MenuItem[] = [
   { path: '/dashboard/jogadores', label: 'Jogadores', icon: UserCircle, match: (p) => p.startsWith('/dashboard/jogadores') },
   { path: '/dashboard/rodadas', label: 'Rodadas', icon: Calendar, match: (p) => p.startsWith('/dashboard/rodadas') || p.startsWith('/dashboard/resultado') },
   { path: '/dashboard/sumula', label: 'Configurar súmula', icon: ClipboardList, match: (p) => p.startsWith('/dashboard/sumula') },
+  { path: '/dashboard/co-adms', label: 'Co-adms', icon: UsersRound, match: (p) => p.startsWith('/dashboard/co-adms') },
 ];
 
 export function OrganizerLayout({ children }: OrganizerLayoutProps) {
