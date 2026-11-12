@@ -12,6 +12,7 @@ export function Register() {
   const navigate = useNavigate();
   const { entrar } = useAuth();
   const [nome, setNome] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmar, setConfirmar] = useState('');
@@ -21,11 +22,15 @@ export function Register() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
+    if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+      setErro('Username: 3–20 caracteres, só letras minúsculas, números e _');
+      return;
+    }
     if (senha.length < 8) { setErro('Senha precisa de pelo menos 8 caracteres'); return; }
     if (senha !== confirmar) { setErro('As senhas não conferem'); return; }
     setLoading(true);
     try {
-      const resp = await api.register({ nome, email, senha });
+      const resp = await api.register({ nome, email, senha, username });
       entrar(resp);
       navigate('/');
     } catch (err) {
@@ -80,6 +85,20 @@ export function Register() {
             <div className="space-y-2">
               <Label htmlFor="nome">Seu nome</Label>
               <Input id="nome" value={nome} onChange={(e) => setNome(e.target.value)} required />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                placeholder="ex.: joao_silva"
+                maxLength={20}
+                autoComplete="username"
+                required
+              />
+              <p className="text-xs text-muted-foreground">3–20 caracteres, letras, números e _</p>
             </div>
 
             <div className="space-y-2">
