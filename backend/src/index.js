@@ -14,6 +14,7 @@ import { partidasRouter } from './routes/partidas.js';
 import { publicoRouter } from './routes/publico.js';
 import { sumulaRouter } from './routes/sumula.js';
 import { comissaoRouter } from './routes/comissao.js';
+import { usuariosRouter } from './routes/usuarios.js';
 
 const log = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
@@ -67,6 +68,7 @@ app.use('/api/public', apiLimiter, publicoRouter);
 app.use('/api/campeonatos', apiLimiter, campeonatosRouter);
 app.use('/api/times', apiLimiter, timesRouter);
 app.use('/api/jogadores', apiLimiter, jogadoresRouter);
+app.use('/api/usuarios', apiLimiter, usuariosRouter);
 app.use('/api/partidas', apiLimiter, partidasRouter);
 app.use('/api/comissao', apiLimiter, comissaoRouter);
 app.use('/api', apiLimiter, sumulaRouter); // paths absolutos: /partidas/:id/gols, /gols/:id, etc.
