@@ -77,8 +77,23 @@ export function subLigada(cfg: SumulaConfig | undefined, secao: SumulaSecao, sub
 }
 export type CampoCustomValor = string | number | boolean | null;
 
-export interface Usuario { id: number; nome: string; email: string; isSuperAdmin?: boolean; }
+export interface Usuario { id: number; nome: string; email: string; username: string | null; isSuperAdmin?: boolean; }
 export interface AuthResponse { token: string; usuario: Usuario; }
+
+export type EscopoCoAdm = 'gerenciar' | 'elenco' | 'calendario' | 'sumula' | 'coAdms' | 'excluir';
+export interface Permissoes {
+  gerenciar: boolean; elenco: boolean; calendario: boolean;
+  sumula: boolean; coAdms: boolean; excluir: boolean;
+}
+export const ESCOPOS_COADM: EscopoCoAdm[] = ['gerenciar', 'elenco', 'calendario', 'sumula', 'coAdms', 'excluir'];
+export function permissoesTudoMarcado(): Permissoes {
+  return { gerenciar: true, elenco: true, calendario: true, sumula: true, coAdms: true, excluir: true };
+}
+export interface CoAdm {
+  usuarioId: number; username: string | null; nome: string; email: string;
+  permissoes: Permissoes; dono: boolean;
+}
+export interface UsuarioBusca { usuarioId: number; username: string; nome: string; }
 
 export interface Campeonato {
   id: number;
@@ -100,6 +115,7 @@ export interface Campeonato {
   descricao: string | null;
   logoUrl: string | null;
   qtdTimes: number;
+  papel: 'dono' | 'co-adm';
 }
 
 export interface CampeonatosResponse {
@@ -338,10 +354,23 @@ const body = (data: unknown) => JSON.stringify(data);
 
 export const api = {
 
-  register: (data: { nome: string; email: string; senha: string }) =>
+  register: (data: { nome: string; email: string; senha: string; username: string }) =>
     request<AuthResponse>('/auth/register', { method: 'POST', body: body(data) }),
   login: (data: { email: string; senha: string }) =>
     request<AuthResponse>('/auth/login', { method: 'POST', body: body(data) }),
+  me: () => request<{ usuario: Usuario }>('/auth/me'),
+  escolherUsername: (username: string) =>
+    request<{ usuario: Usuario }>('/auth/escolher-username', { method: 'POST', body: body({ username }) }),
+  buscarUsuarios: (q: string) =>
+    request<UsuarioBusca[]>(`/usuarios/buscar?q=${encodeURIComponent(q)}`),
+  listarCoAdms: (campeonatoId: number) =>
+    request<CoAdm[]>(`/campeonatos/${campeonatoId}/co-adms`),
+  convidarCoAdm: (campeonatoId: number, data: { identificador: string; permissoes: Permissoes }) =>
+    request<CoAdm>(`/campeonatos/${campeonatoId}/co-adms`, { method: 'POST', body: body(data) }),
+  editarCoAdm: (campeonatoId: number, usuarioId: number, permissoes: Permissoes) =>
+    request<CoAdm>(`/campeonatos/${campeonatoId}/co-adms/${usuarioId}`, { method: 'PATCH', body: body({ permissoes }) }),
+  removerCoAdm: (campeonatoId: number, usuarioId: number) =>
+    request<void>(`/campeonatos/${campeonatoId}/co-adms/${usuarioId}`, { method: 'DELETE' }),
 
   listarCampeonatos: () => request<CampeonatosResponse>('/campeonatos'),
   obterCampeonato: (id: number) => request<Campeonato>(`/campeonatos/${id}`),
