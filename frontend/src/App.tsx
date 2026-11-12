@@ -13,6 +13,8 @@ import { RoundsMatches } from './components/screens/RoundsMatches';
 import { RegisterResult } from './components/screens/RegisterResult';
 import { ConfigurarSumula } from './components/screens/ConfigurarSumula';
 import { PublicChampionship } from './components/screens/PublicChampionship';
+import { EscolherUsername } from './components/screens/EscolherUsername';
+import { CoAdmins } from './components/screens/CoAdmins';
 
 function Protected({ children }: { children: React.ReactNode }) {
   return <ProtectedRoute>{children}</ProtectedRoute>;
@@ -27,6 +29,7 @@ export default function App() {
           <Route path="/" element={<PublicHome />} />
           <Route path="/login" element={<Login />} />
           <Route path="/cadastro" element={<Register />} />
+          <Route path="/escolher-username" element={<Protected><EscolherUsername /></Protected>} />
           <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
           <Route path="/dashboard/novo" element={<Protected><CreateChampionship /></Protected>} />
           <Route path="/dashboard/editar/:id" element={<Protected><CreateChampionship /></Protected>} />
@@ -35,6 +38,7 @@ export default function App() {
           <Route path="/dashboard/rodadas" element={<Protected><RoundsMatches /></Protected>} />
           <Route path="/dashboard/resultado" element={<Protected><RegisterResult /></Protected>} />
           <Route path="/dashboard/sumula" element={<Protected><ConfigurarSumula /></Protected>} />
+          <Route path="/dashboard/co-adms" element={<Protected><CoAdmins /></Protected>} />
           <Route path="/campeonato/:id" element={<PublicChampionship />} />
         </Routes>
       </BrowserRouter>

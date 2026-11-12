@@ -2,8 +2,16 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authRequired } from '../middleware/auth.js';
-import { asyncHandler, badRequest, conflict, notFound } from '../lib/http.js';
+import { asyncHandler, badRequest, conflict, forbidden, notFound } from '../lib/http.js';
 import { gerarRodadas, listarRodadas } from '../services/partida.js';
+import {
+  assertPermissaoCampeonato,
+  assertLeituraCampeonato,
+  permissoesTudoMarcado,
+  normalizarPermissoes,
+  podeSerConvidado,
+  podeEditarPermissoesDe,
+} from '../services/permissoes.js';
 
 export const campeonatosRouter = Router();
 
@@ -47,7 +55,7 @@ const campeonatoSchema = z.object({
   logoUrl: z.string().url().nullable().optional(),
 });
 
-function toCampDto(c, qtdTimes) {
+function toCampDto(c, qtdTimes, papel) {
   return {
     id: c.id,
     nome: c.nome,
@@ -68,16 +76,18 @@ function toCampDto(c, qtdTimes) {
     descricao: c.descricao,
     logoUrl: c.logoUrl,
     qtdTimes,
+    papel,
   };
 }
 
-async function getOwned(usuarioId, id) {
-  const c = await prisma.campeonato.findUnique({ where: { id } });
-  if (!c) throw notFound('Campeonato não encontrado');
-  if (c.usuarioId === usuarioId) return c;
-  const u = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { isSuperAdmin: true } });
-  if (u?.isSuperAdmin) return c;
-  throw notFound('Campeonato não encontrado');
+async function getCamp(usuarioId, id, escopo) {
+  const { camp } = await assertPermissaoCampeonato(usuarioId, id, escopo);
+  return camp;
+}
+
+async function getCampLeitura(usuarioId, id) {
+  const { camp } = await assertLeituraCampeonato(usuarioId, id);
+  return camp;
 }
 
 async function resolverVinculo(usuarioId, vinculadoId, selfId) {
@@ -94,12 +104,17 @@ campeonatosRouter.get(
   '/',
   asyncHandler(async (req, res) => {
     const u = await prisma.usuario.findUnique({ where: { id: req.userId }, select: { isSuperAdmin: true } });
+    const where = u?.isSuperAdmin
+      ? {}
+      : { OR: [{ usuarioId: req.userId }, { coAdmins: { some: { usuarioId: req.userId } } }] };
     const lista = await prisma.campeonato.findMany({
-      where: u?.isSuperAdmin ? {} : { usuarioId: req.userId },
+      where,
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { inscricoes: true } } },
     });
-    const campeonatos = lista.map((c) => toCampDto(c, c._count.inscricoes));
+    const campeonatos = lista.map((c) =>
+      toCampDto(c, c._count.inscricoes, c.usuarioId === req.userId ? 'dono' : 'co-adm'),
+    );
     const stats = {
       total: lista.length,
       emAndamento: lista.filter((c) => c.status === 'EM_ANDAMENTO').length,
@@ -114,9 +129,9 @@ campeonatosRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const c = await getOwned(req.userId, id);
+    const c = await getCampLeitura(req.userId, id);
     const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
-    res.json(toCampDto(c, qtdTimes));
+    res.json(toCampDto(c, qtdTimes, c.usuarioId === req.userId ? 'dono' : 'co-adm'));
   }),
 );
 
@@ -156,7 +171,7 @@ campeonatosRouter.post(
       await prisma.grupo.createMany({ data: nomes.map((nome) => ({ campeonatoId: c.id, nome })) });
     }
 
-    res.status(201).json(toCampDto(c, 0));
+    res.status(201).json(toCampDto(c, 0, 'dono'));
   }),
 );
 
@@ -164,7 +179,7 @@ campeonatosRouter.put(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const atual = await getOwned(req.userId, id);
+    const atual = await getCamp(req.userId, id, 'gerenciar');
     if (atual.status !== 'NAO_INICIADO') throw conflict('Campeonato já iniciado — não pode ser editado');
     const temPartida = await prisma.partida.findFirst({ where: { campeonatoId: id }, select: { id: true } });
     if (temPartida) throw conflict('Remova as partidas geradas antes de editar o campeonato');
@@ -209,7 +224,7 @@ campeonatosRouter.put(
     }
 
     const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
-    res.json(toCampDto(c, qtdTimes));
+    res.json(toCampDto(c, qtdTimes, c.usuarioId === req.userId ? 'dono' : 'co-adm'));
   }),
 );
 
@@ -217,7 +232,7 @@ campeonatosRouter.delete(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCamp(req.userId, id, 'excluir');
     await prisma.campeonato.delete({ where: { id } });
     res.status(204).end();
   }),
@@ -252,7 +267,7 @@ campeonatosRouter.get(
   '/:id/sumula-config',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const c = await getOwned(req.userId, id);
+    const c = await getCampLeitura(req.userId, id);
     res.json(c.sumulaConfig ?? defaultSumulaConfig());
   }),
 );
@@ -261,7 +276,7 @@ campeonatosRouter.put(
   '/:id/sumula-config',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCamp(req.userId, id, 'sumula');
     const data = sumulaConfigSchema.parse(req.body);
     const c = await prisma.campeonato.update({
       where: { id },
@@ -276,7 +291,7 @@ campeonatosRouter.get(
   '/:id/times',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCampLeitura(req.userId, id);
     const inscr = await prisma.inscricaoCampeonato.findMany({
       where: { campeonatoId: id },
       include: { time: true },
@@ -308,7 +323,7 @@ campeonatosRouter.post(
   '/:id/inscricoes',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCamp(req.userId, id, 'elenco');
     const data = inscricaoSchema.parse(req.body);
     await assertTimeDoUsuario(req.userId, data.timeId);
     await assertGrupoDoCampeonato(id, data.grupoId);
@@ -327,7 +342,7 @@ campeonatosRouter.delete(
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const timeId = Number(req.params.timeId);
-    await getOwned(req.userId, id);
+    await getCamp(req.userId, id, 'elenco');
     await prisma.inscricaoCampeonato.deleteMany({ where: { campeonatoId: id, timeId } });
     res.status(204).end();
   }),
@@ -337,7 +352,7 @@ campeonatosRouter.get(
   '/:id/grupos',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCampLeitura(req.userId, id);
     const grupos = await prisma.grupo.findMany({
       where: { campeonatoId: id },
       orderBy: { nome: 'asc' },
@@ -357,7 +372,7 @@ campeonatosRouter.post(
   '/:id/gerar-rodadas',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCamp(req.userId, id, 'calendario');
     res.json(await gerarRodadas(id));
   }),
 );
@@ -366,7 +381,7 @@ campeonatosRouter.get(
   '/:id/partidas',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCampLeitura(req.userId, id);
     res.json(await listarRodadas(id));
   }),
 );
@@ -398,7 +413,7 @@ campeonatosRouter.post(
   '/:id/partidas',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const c = await getOwned(req.userId, id);
+    const c = await getCamp(req.userId, id, 'calendario');
     assertFormatoManual(c);
     const data = partidaManualSchema.parse(req.body);
     await assertAmbosInscritos(id, data.mandanteId, data.visitanteId);
@@ -420,7 +435,7 @@ campeonatosRouter.post(
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const n = Number(req.params.n);
-    const c = await getOwned(req.userId, id);
+    const c = await getCamp(req.userId, id, 'calendario');
     assertFormatoManual(c);
     const inscritos = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
     if (inscritos < 2) throw badRequest('Precisa de pelo menos 2 times inscritos');
@@ -457,7 +472,7 @@ campeonatosRouter.post(
   '/:id/sortear-tudo',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const c = await getOwned(req.userId, id);
+    const c = await getCamp(req.userId, id, 'calendario');
     assertFormatoManual(c);
     const { reset } = sortearSchema.parse(req.body ?? {});
     const inscritos = await prisma.inscricaoCampeonato.findMany({
@@ -533,7 +548,7 @@ campeonatosRouter.post(
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const n = Number(req.params.n);
-    const c = await getOwned(req.userId, id);
+    const c = await getCamp(req.userId, id, 'calendario');
     assertFormatoManual(c);
     const { reset } = sortearSchema.parse(req.body ?? {});
     const inscritos = await prisma.inscricaoCampeonato.findMany({
@@ -578,7 +593,7 @@ campeonatosRouter.get(
   '/:id/arbitros',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCampLeitura(req.userId, id);
     const lista = await prisma.arbitroCampeonato.findMany({
       where: { campeonatoId: id },
       orderBy: { id: 'asc' },
@@ -601,7 +616,7 @@ campeonatosRouter.post(
   '/:id/arbitros',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await getOwned(req.userId, id);
+    await getCamp(req.userId, id, 'calendario');
     const data = arbitroSchema.parse(req.body);
     const existente = await prisma.arbitroCampeonato.findUnique({
       where: { campeonatoId_email: { campeonatoId: id, email: data.email } },
@@ -625,8 +640,132 @@ campeonatosRouter.delete(
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const arbitroId = Number(req.params.arbitroId);
-    await getOwned(req.userId, id);
+    await getCamp(req.userId, id, 'calendario');
     await prisma.arbitroCampeonato.deleteMany({ where: { id: arbitroId, campeonatoId: id } });
+    res.status(204).end();
+  }),
+);
+
+// ===== Co-admins =====
+
+const permissoesSchema = z.object({
+  gerenciar: z.boolean(),
+  elenco: z.boolean(),
+  calendario: z.boolean(),
+  sumula: z.boolean(),
+  coAdms: z.boolean(),
+  excluir: z.boolean(),
+});
+
+const convidarCoAdmSchema = z.object({
+  identificador: z.string().trim().min(1).max(200),
+  permissoes: permissoesSchema,
+});
+
+const editarCoAdmSchema = z.object({ permissoes: permissoesSchema });
+
+function toCoAdmDto(usuario, permissoes, dono) {
+  return {
+    usuarioId: usuario.id,
+    username: usuario.username,
+    nome: usuario.nome,
+    email: usuario.email,
+    permissoes,
+    dono,
+  };
+}
+
+campeonatosRouter.get(
+  '/:id/co-adms',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const c = await getCampLeitura(req.userId, id);
+    const dono = await prisma.usuario.findUnique({
+      where: { id: c.usuarioId },
+      select: { id: true, username: true, nome: true, email: true },
+    });
+    const coAdms = await prisma.campeonatoAdmin.findMany({
+      where: { campeonatoId: id },
+      include: { usuario: { select: { id: true, username: true, nome: true, email: true } } },
+      orderBy: { criadoEm: 'asc' },
+    });
+    const lista = [
+      toCoAdmDto(dono, permissoesTudoMarcado(), true),
+      ...coAdms.map((a) => toCoAdmDto(a.usuario, normalizarPermissoes(a.permissoes), false)),
+    ];
+    res.json(lista);
+  }),
+);
+
+campeonatosRouter.post(
+  '/:id/co-adms',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const camp = await getCamp(req.userId, id, 'coAdms');
+    const data = convidarCoAdmSchema.parse(req.body);
+    const chave = data.identificador.toLowerCase();
+    const alvo = await prisma.usuario.findUnique({
+      where: chave.includes('@') ? { email: chave } : { username: chave },
+      select: { id: true, username: true, nome: true, email: true },
+    });
+    if (!alvo) throw notFound('Usuário não encontrado');
+    const existente = await prisma.campeonatoAdmin.findUnique({
+      where: { campeonatoId_usuarioId: { campeonatoId: id, usuarioId: alvo.id } },
+    });
+    const veredito = podeSerConvidado(camp, alvo, existente);
+    if (!veredito.ok) {
+      if (veredito.motivo === 'eh-o-dono') throw badRequest('Usuário já é o dono do campeonato');
+      if (veredito.motivo === 'ja-eh-co-adm') throw conflict('Usuário já é co-adm deste campeonato');
+    }
+    const perms = normalizarPermissoes(data.permissoes);
+    try {
+      const criado = await prisma.campeonatoAdmin.create({
+        data: { campeonatoId: id, usuarioId: alvo.id, permissoes: perms },
+      });
+      res.status(201).json(toCoAdmDto(alvo, normalizarPermissoes(criado.permissoes), false));
+    } catch (e) {
+      if (e?.code === 'P2002') throw conflict('Usuário já é co-adm deste campeonato');
+      throw e;
+    }
+  }),
+);
+
+campeonatosRouter.patch(
+  '/:id/co-adms/:usuarioId',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const alvoId = Number(req.params.usuarioId);
+    await getCamp(req.userId, id, 'coAdms');
+    if (!podeEditarPermissoesDe({ id: req.userId }, alvoId)) {
+      throw forbidden('Você não pode editar as próprias permissões');
+    }
+    const data = editarCoAdmSchema.parse(req.body);
+    const atual = await prisma.campeonatoAdmin.findUnique({
+      where: { campeonatoId_usuarioId: { campeonatoId: id, usuarioId: alvoId } },
+      include: { usuario: { select: { id: true, username: true, nome: true, email: true } } },
+    });
+    if (!atual) throw notFound('Co-adm não encontrado');
+    const perms = normalizarPermissoes(data.permissoes);
+    const atualizado = await prisma.campeonatoAdmin.update({
+      where: { campeonatoId_usuarioId: { campeonatoId: id, usuarioId: alvoId } },
+      data: { permissoes: perms },
+    });
+    res.json(toCoAdmDto(atual.usuario, normalizarPermissoes(atualizado.permissoes), false));
+  }),
+);
+
+campeonatosRouter.delete(
+  '/:id/co-adms/:usuarioId',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const alvoId = Number(req.params.usuarioId);
+    if (req.userId !== alvoId) {
+      await getCamp(req.userId, id, 'coAdms');
+    } else {
+      // auto-remoção: basta ser membro do campeonato.
+      await getCampLeitura(req.userId, id);
+    }
+    await prisma.campeonatoAdmin.deleteMany({ where: { campeonatoId: id, usuarioId: alvoId } });
     res.status(204).end();
   }),
 );
