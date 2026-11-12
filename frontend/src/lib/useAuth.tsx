@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import { auth, registrarOnUnauthorized, AuthResponse, Usuario } from './api';
+import { auth, registrarOnUnauthorized, AuthResponse, Usuario, api } from './api';
 import { campeonatoAtivo } from './session';
 
 interface AuthState {
@@ -7,6 +7,7 @@ interface AuthState {
   isLogged: boolean;
   entrar: (r: AuthResponse) => void;
   sair: () => void;
+  atualizarUsuario: (u: Usuario) => void;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -20,7 +21,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const entrar = useCallback((r: AuthResponse) => {
     auth.save(r);
-    // Evita que campeonato/time/partida ativos de outra conta vazem pra essa.
     campeonatoAtivo.clear();
     setUsuario(r.usuario);
   }, []);
@@ -31,6 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsuario(null);
   }, []);
 
+  const atualizarUsuario = useCallback((u: Usuario) => {
+    const token = auth.getToken();
+    if (token) auth.save({ token, usuario: u });
+    setUsuario(u);
+  }, []);
+
   useEffect(() => {
     registrarOnUnauthorized(() => {
       auth.clear();
@@ -39,8 +45,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Refresca o usuário vindo do backend ao montar, pra cobrir sessões antigas que
+  // não tinham `username` no localStorage.
+  useEffect(() => {
+    if (!auth.isLogged()) return;
+    const cached = auth.getUser();
+    if (cached && cached.username !== undefined) return;
+    api.me().then(({ usuario: u }) => atualizarUsuario(u)).catch(() => { /* 401 já trata via onUnauthorized */ });
+  }, [atualizarUsuario]);
+
   return (
-    <AuthContext.Provider value={{ usuario, isLogged: !!usuario, entrar, sair }}>
+    <AuthContext.Provider value={{ usuario, isLogged: !!usuario, entrar, sair, atualizarUsuario }}>
       {children}
     </AuthContext.Provider>
   );
