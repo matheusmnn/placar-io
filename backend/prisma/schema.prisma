@@ -86,6 +86,7 @@ model Usuario {
   id                   Int               @id @default(autoincrement())
   nome                 String
   email                String            @unique
+  username             String?           @unique
   senhaHash            String
   isSuperAdmin         Boolean           @default(false)
   createdAt            DateTime          @default(now())
@@ -93,6 +94,7 @@ model Usuario {
   times                Time[]
   partidasComoJuiz     Partida[]         @relation("JuizPartida")
   auxiliariasEm        PartidaAuxiliar[]
+  coAdministracoes     CampeonatoAdmin[]
 }
 
 model Campeonato {
@@ -124,6 +126,21 @@ model Campeonato {
   partidas      Partida[]
   grupos        Grupo[]
   arbitros      ArbitroCampeonato[]
+  coAdmins      CampeonatoAdmin[]
+}
+
+model CampeonatoAdmin {
+  id            Int        @id @default(autoincrement())
+  campeonatoId  Int
+  campeonato    Campeonato @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  usuarioId     Int
+  usuario       Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  permissoes    Json
+  criadoEm      DateTime   @default(now())
+  atualizadoEm  DateTime   @updatedAt
+
+  @@unique([campeonatoId, usuarioId])
+  @@index([usuarioId])
 }
 
 model ArbitroCampeonato {
