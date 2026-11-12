@@ -63,20 +63,19 @@ export function Dashboard() {
     }
   }
 
-  const campeonatos = data?.campeonatos ?? [];
+  const todos = data?.campeonatos ?? [];
   const hoje = useMemo(() => {
     return new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
   }, []);
 
-  const filtrados = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    if (!q) return campeonatos;
-    return campeonatos.filter((c) => c.nome.toLowerCase().includes(q));
-  }, [campeonatos, busca]);
+  const q = busca.trim().toLowerCase();
+  const casa = (c: Campeonato) => !q || c.nome.toLowerCase().includes(q);
+  const meus = todos.filter((c) => c.papel === 'dono').filter(casa);
+  const coAdm = todos.filter((c) => c.papel === 'co-adm').filter(casa);
 
-  const emAndamento = filtrados.filter((c) => c.status === 'EM_ANDAMENTO');
-  const rascunhos = filtrados.filter((c) => c.status === 'NAO_INICIADO');
-  const encerrados = filtrados.filter((c) => c.status === 'ENCERRADO');
+  const emAndamento = meus.filter((c) => c.status === 'EM_ANDAMENTO');
+  const rascunhos = meus.filter((c) => c.status === 'NAO_INICIADO');
+  const encerrados = meus.filter((c) => c.status === 'ENCERRADO');
 
   return (
     <OrganizerLayout>
@@ -97,7 +96,7 @@ export function Dashboard() {
           </div>
         ) : erro ? (
           <p className="text-sm text-destructive">{erro}</p>
-        ) : campeonatos.length === 0 ? (
+        ) : todos.length === 0 ? (
           <div className="border border-dashed border-foreground/15 rounded-md p-12 text-center">
             <p className="font-display text-xl mb-2">Nenhum campeonato ainda</p>
             <p className="text-sm text-muted-foreground mb-5">Crie o primeiro pra começar a cadastrar times e abrir súmulas.</p>
@@ -126,6 +125,29 @@ export function Dashboard() {
             <Lista titulo="Em andamento" lista={emAndamento} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
             <Lista titulo="Rascunhos" lista={rascunhos} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
             <Lista titulo="Encerrados" lista={encerrados} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
+            {coAdm.length > 0 && (
+              <section>
+                <div className="flex items-baseline justify-between mb-3">
+                  <h2 className="font-display text-xl">Campeonatos que administro</h2>
+                  <span className="text-xs text-muted-foreground font-scoreboard">{coAdm.length}</span>
+                </div>
+                <div className="border-y border-border divide-y divide-border">
+                  {coAdm.map((c) => (
+                    <div key={c.id} className="group grid grid-cols-[1fr_auto] items-center gap-6 py-4 px-2 -mx-2 hover:bg-foreground/[0.02] transition-colors">
+                      <button onClick={() => abrir(c)} className="min-w-0 text-left cursor-pointer">
+                        <p className="font-display text-lg leading-tight truncate">{c.nome}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <span className="font-scoreboard">{c.qtdTimes}</span> times · {statusLabel[c.status]} · co-adm
+                        </p>
+                      </button>
+                      <button onClick={() => abrir(c)} className="text-muted-foreground group-hover:text-foreground cursor-pointer" title="Abrir">
+                        <ArrowUpRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </div>
