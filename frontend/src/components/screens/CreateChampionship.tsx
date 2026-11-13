@@ -151,7 +151,7 @@ export function CreateChampionship() {
         formato,
         pontosVitoria,
         pontosEmpate,
-        idaVolta: opcao.temKO || formato === 'PONTOS_CORRIDOS' ? idaVolta : false,
+        idaVolta: opcao.temKO || formato === 'PONTOS_CORRIDOS' || formato === 'GRUPOS' ? idaVolta : false,
         koDesempate: opcao.temKO ? koDesempate : undefined,
         duracaoPrimeiroTempo: duracao1T,
         duracaoSegundoTempo: duracao2T,
@@ -292,6 +292,13 @@ export function CreateChampionship() {
                 Turno e returno
               </label>
             )}
+
+            {formato === 'GRUPOS' && (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={idaVolta} onChange={(e) => setIdaVolta(e.target.checked)} className="rounded border-foreground/20" />
+                Ida e volta dentro do grupo
+              </label>
+            )}
           </Secao>
 
           <Secao titulo="Pontuação">
@@ -321,7 +328,7 @@ export function CreateChampionship() {
           </Secao>
 
 
-          <Secao titulo="Critérios de desempate" ajuda="Aplicados em ordem depois dos pontos.">
+          {formato !== 'MATA_MATA' && <Secao titulo="Critérios de desempate" ajuda="Aplicados em ordem depois dos pontos.">
             <div className="space-y-1.5">
               {criterios.map((c, i) => (
                 <div key={c} className="flex items-center gap-2 border border-border rounded-md px-3 py-2 text-sm">
@@ -342,7 +349,7 @@ export function CreateChampionship() {
                   </button>
                 ))}
             </div>
-          </Secao>
+          </Secao>}
 
           <Secao titulo="Faixas da classificação" ajuda="Cor e legenda ao lado das posições na tabela pública. Ex: verde = acesso, vermelho = rebaixamento.">
             {faixas.length === 0 ? (
