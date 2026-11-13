@@ -301,7 +301,7 @@ export function CreateChampionship() {
             )}
           </Secao>
 
-          <Secao titulo="Pontuação">
+          {formato !== 'MATA_MATA' && <Secao titulo="Pontuação">
             <div className="grid grid-cols-2 gap-5 max-w-sm">
               <div className="space-y-2">
                 <Label htmlFor="pv">Vitória</Label>
@@ -312,7 +312,7 @@ export function CreateChampionship() {
                 <Input id="pe" type="number" min={0} max={10} value={pontosEmpate} onChange={(e) => setPontosEmpate(Number(e.target.value))} />
               </div>
             </div>
-          </Secao>
+          </Secao>}
 
           <Secao titulo="Duração do jogo" ajuda="Minutos por tempo. Ex.: sub-11 costuma jogar 2x25'.">
             <div className="grid grid-cols-2 gap-5 max-w-sm">
