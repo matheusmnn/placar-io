@@ -337,6 +337,40 @@ sumulaRouter.put(
   }),
 );
 
+// -------- Série de pênaltis (shootout pênalti a pênalti) -----------------
+
+const penaltisSerieSchema = z.object({
+  serie: z
+    .array(
+      z.object({
+        time: z.enum(['M', 'V']),
+        converteu: z.boolean(),
+        jogadorId: z.number().int().nullable().optional(),
+      }),
+    )
+    .max(50)
+    .nullable(),
+});
+
+sumulaRouter.put(
+  '/partidas/:id/penaltis-serie',
+  asyncHandler(async (req, res) => {
+    const p = await carregarPartidaEditavel(req);
+    const { serie } = penaltisSerieSchema.parse(req.body);
+    const penM = serie == null ? null : serie.filter((s) => s.time === 'M' && s.converteu).length;
+    const penV = serie == null ? null : serie.filter((s) => s.time === 'V' && s.converteu).length;
+    const atualizada = await prisma.partida.update({
+      where: { id: p.id },
+      data: {
+        penaltisSerie: serie,
+        penaltisMandante: penM,
+        penaltisVisitante: penV,
+      },
+    });
+    res.json(atualizada);
+  }),
+);
+
 // -------- Fechar placar (sem tocar em gols/cartões granulares) ----------
 
 const placarSchema = z.object({

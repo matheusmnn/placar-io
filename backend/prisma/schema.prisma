@@ -253,6 +253,7 @@ model Partida {
   golsVisitanteProrr Int?
   penaltisMandante   Int?
   penaltisVisitante  Int?
+  penaltisSerie      Json?
   status          StatusPartida @default(AGENDADA)
   dataPartida     DateTime?
   local           String?

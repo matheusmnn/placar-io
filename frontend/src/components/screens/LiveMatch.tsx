@@ -14,8 +14,9 @@ import {
   api, ApiError, Jogador, PartidaDetalhe, TimeResumo, TipoCartao,
 } from '../../lib/api';
 import { partidaAtiva } from '../../lib/session';
+import { PenaltisEditor } from '../PenaltisEditor';
 
-type Fase = 'aguardando' | '1T' | 'intervalo' | '2T' | 'encerrada';
+type Fase = 'aguardando' | '1T' | 'intervalo' | '2T' | 'pos2T' | 'encerrada';
 
 function faseAtual(det: PartidaDetalhe): Fase {
   const c = det.cronologia;
@@ -24,7 +25,7 @@ function faseAtual(det: PartidaDetalhe): Fase {
   if (!c.termino1T) return '1T';
   if (!c.inicio2T) return 'intervalo';
   if (!c.termino2T) return '2T';
-  return 'encerrada';
+  return 'pos2T';
 }
 
 function fmtMMSS(seg: number): string {
@@ -133,11 +134,18 @@ export function LiveMatch() {
   async function iniciar2T() {
     await withBusy(() => api.salvarCronologia(partida.id, { inicio2T: new Date().toISOString() }));
   }
+  async function encerrar2T() {
+    await withBusy(() => api.salvarCronologia(partida.id, { termino2T: new Date().toISOString() }));
+  }
   async function encerrarPartida() {
-    await withBusy(async () => {
-      await api.salvarCronologia(partida.id, { termino2T: new Date().toISOString() });
-      await api.fecharPlacar(partida.id, { golsMandante: golsMand, golsVisitante: golsVis });
-    });
+    const serie = partida.penaltisSerie ?? [];
+    const temPen = serie.length > 0;
+    await withBusy(() => api.fecharPlacar(partida.id, {
+      golsMandante: golsMand,
+      golsVisitante: golsVis,
+      penaltisMandante: temPen ? serie.filter((s) => s.time === 'M' && s.converteu).length : null,
+      penaltisVisitante: temPen ? serie.filter((s) => s.time === 'V' && s.converteu).length : null,
+    }));
   }
   async function atualizarAcrescimo(v: number) {
     const campo = fase === '1T' ? 'acrescimo1T' : 'acrescimo2T';
@@ -169,6 +177,7 @@ export function LiveMatch() {
     : fase === '1T' ? `${fmtMMSS(segRodando)} · 1º tempo`
     : fase === 'intervalo' ? 'Intervalo'
     : fase === '2T' ? `${fmtMMSS(segRodando)} · 2º tempo`
+    : fase === 'pos2T' ? 'Fim do 2º tempo · pode ir pra pênaltis ou encerrar'
     : 'Encerrada';
 
   return (
@@ -219,14 +228,30 @@ export function LiveMatch() {
           )}
           {fase === '2T' && (
             <>
-              <Button onClick={encerrarPartida} disabled={salvando} variant="destructive"><Flag className="w-4 h-4" /> Encerrar partida</Button>
+              <Button onClick={encerrar2T} disabled={salvando} variant="outline"><Pause className="w-4 h-4" /> Encerrar 2º tempo</Button>
               <AcrescimoInput value={acr2} onSave={atualizarAcrescimo} label="Acréscimo 2T (min)" disabled={salvando} />
             </>
+          )}
+          {fase === 'pos2T' && (
+            <Button onClick={encerrarPartida} disabled={salvando} variant="destructive"><Flag className="w-4 h-4" /> Encerrar partida</Button>
           )}
           {fase === 'encerrada' && (
             <p className="text-sm text-muted-foreground">Partida encerrada. Edite detalhes finos pela súmula.</p>
           )}
         </div>
+
+        {fase === 'pos2T' && partida.mandante && partida.visitante && (
+          <div className="rounded-lg border border-border bg-card p-4 mb-4">
+            <p className="text-sm font-semibold mb-3">Decisão por pênaltis <span className="text-xs text-muted-foreground font-normal">(opcional)</span></p>
+            <PenaltisEditor
+              partidaId={partida.id}
+              serie={partida.penaltisSerie ?? null}
+              mandante={partida.mandante}
+              visitante={partida.visitante}
+              onSaved={() => partidaId ? recarregar(partidaId) : Promise.resolve()}
+            />
+          </div>
+        )}
 
         {/* Ações rápidas */}
         {(fase === '1T' || fase === '2T') && (

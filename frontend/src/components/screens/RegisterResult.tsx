@@ -13,6 +13,7 @@ import {
   ObservacoesPartida, Arbitragem, subLigada,
 } from '../../lib/api';
 import { campeonatoAtivo, partidaAtiva } from '../../lib/session';
+import { PenaltisEditor } from '../PenaltisEditor';
 
 /* ----------------------------- helpers ---------------------------------- */
 
@@ -295,6 +296,7 @@ export function RegisterResult() {
           partida={partida}
           cronologia={det.cronologia}
           salvando={salvando}
+          onPenaltisSaved={() => recarregar(partida.id)}
           salvar1T={async ({ m, v }) => {
             await withBusy(() => api.salvarCronologia(partida.id, {
               placar1TMandante: m,
@@ -1645,7 +1647,7 @@ function PlacarContador({ label, valor, onChange }: { label: string; valor: numb
 }
 
 function PlacarSection({
-  partida, cronologia, salvando, salvar1T, onSalvarFinal,
+  partida, cronologia, salvando, salvar1T, onSalvarFinal, onPenaltisSaved,
 }: {
   partida: Partida; cronologia?: Cronologia; salvando: boolean;
   salvar1T: (dados: { m: number | null; v: number | null }) => Promise<unknown>;
@@ -1655,6 +1657,7 @@ function PlacarSection({
     golsMandanteProrr?: number | null; golsVisitanteProrr?: number | null;
     penaltisMandante?: number | null; penaltisVisitante?: number | null;
   }) => Promise<unknown>;
+  onPenaltisSaved: () => void | Promise<void>;
 }) {
   const [gm1, setGm1] = useState<number>(cronologia?.placar1TMandante ?? 0);
   const [gv1, setGv1] = useState<number>(cronologia?.placar1TVisitante ?? 0);
@@ -1665,6 +1668,9 @@ function PlacarSection({
   const [prorrGv, setProrrGv] = useState(partida.golsVisitanteProrr != null ? String(partida.golsVisitanteProrr) : '');
   const [penM, setPenM] = useState(partida.penaltisMandante != null ? String(partida.penaltisMandante) : '');
   const [penV, setPenV] = useState(partida.penaltisVisitante != null ? String(partida.penaltisVisitante) : '');
+  const [modoPen, setModoPen] = useState<'resultado' | 'sequencia'>(
+    partida.penaltisSerie && partida.penaltisSerie.length > 0 ? 'sequencia' : 'resultado',
+  );
 
   return (
     <CBFSection title="Placar · Fechar súmula" right={
@@ -1730,13 +1736,35 @@ function PlacarSection({
               )}
             </div>
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Pênaltis (se foi pra decisão)</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Input type="number" min={0} value={penM} onChange={(e) => setPenM(e.target.value)}
-                  placeholder="Pên. mandante" className="h-8 text-sm" />
-                <Input type="number" min={0} value={penV} onChange={(e) => setPenV(e.target.value)}
-                  placeholder="Pên. visitante" className="h-8 text-sm" />
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">Pênaltis (se foi pra decisão)</p>
+                <div className="flex gap-1 text-xs">
+                  <button type="button" onClick={() => setModoPen('resultado')} className={`px-2 py-0.5 rounded ${modoPen === 'resultado' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>Só resultado</button>
+                  <button type="button" onClick={() => setModoPen('sequencia')} className={`px-2 py-0.5 rounded ${modoPen === 'sequencia' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>Cada cobrança</button>
+                </div>
               </div>
+              {modoPen === 'resultado' ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input type="number" min={0} value={penM} onChange={(e) => setPenM(e.target.value)}
+                    placeholder="Pên. mandante" className="h-8 text-sm" />
+                  <Input type="number" min={0} value={penV} onChange={(e) => setPenV(e.target.value)}
+                    placeholder="Pên. visitante" className="h-8 text-sm" />
+                </div>
+              ) : partida.mandante && partida.visitante ? (
+                <PenaltisEditor
+                  partidaId={partida.id}
+                  serie={partida.penaltisSerie ?? null}
+                  mandante={partida.mandante}
+                  visitante={partida.visitante}
+                  onSaved={async () => {
+                    await onPenaltisSaved();
+                    const m = (partida.penaltisSerie ?? []).filter((s) => s.time === 'M' && s.converteu).length;
+                    const v = (partida.penaltisSerie ?? []).filter((s) => s.time === 'V' && s.converteu).length;
+                    setPenM(String(m));
+                    setPenV(String(v));
+                  }}
+                />
+              ) : null}
             </div>
           </div>
         </details>

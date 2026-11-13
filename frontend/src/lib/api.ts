@@ -174,6 +174,13 @@ export interface Partida {
   golsVisitanteProrr: number | null;
   penaltisMandante: number | null;
   penaltisVisitante: number | null;
+  penaltisSerie: PenaltiCobranca[] | null;
+}
+
+export interface PenaltiCobranca {
+  time: 'M' | 'V';
+  converteu: boolean;
+  jogadorId?: number | null;
 }
 
 export interface Rodada { titulo: string; partidas: Partida[]; }
@@ -488,6 +495,9 @@ export const api = {
 
   salvarStats: (partidaId: number, stats: { timeId: number; chave: ChaveStat; valor: number }[]) =>
     request<StatPartida[]>(`/partidas/${partidaId}/stats`, { method: 'PUT', body: body({ stats }) }),
+
+  salvarPenaltisSerie: (partidaId: number, serie: PenaltiCobranca[] | null) =>
+    request<Partida>(`/partidas/${partidaId}/penaltis-serie`, { method: 'PUT', body: body({ serie }) }),
 
   fecharPlacar: (partidaId: number, data: {
     golsMandante: number; golsVisitante: number;

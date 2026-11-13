@@ -568,6 +568,7 @@ export function toPartidaDto(p) {
     golsVisitanteProrr: p.golsVisitanteProrr,
     penaltisMandante: p.penaltisMandante,
     penaltisVisitante: p.penaltisVisitante,
+    penaltisSerie: p.penaltisSerie ?? null,
   };
 }
 
