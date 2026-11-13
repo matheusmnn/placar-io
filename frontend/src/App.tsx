@@ -11,6 +11,7 @@ import { RegisterTeams } from './components/screens/RegisterTeams';
 import { RegisterPlayers } from './components/screens/RegisterPlayers';
 import { RoundsMatches } from './components/screens/RoundsMatches';
 import { RegisterResult } from './components/screens/RegisterResult';
+import { LiveMatch } from './components/screens/LiveMatch';
 import { ConfigurarSumula } from './components/screens/ConfigurarSumula';
 import { PublicChampionship } from './components/screens/PublicChampionship';
 import { EscolherUsername } from './components/screens/EscolherUsername';
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/dashboard/jogadores" element={<Protected><RegisterPlayers /></Protected>} />
           <Route path="/dashboard/rodadas" element={<Protected><RoundsMatches /></Protected>} />
           <Route path="/dashboard/resultado" element={<Protected><RegisterResult /></Protected>} />
+          <Route path="/dashboard/ao-vivo" element={<Protected><LiveMatch /></Protected>} />
           <Route path="/dashboard/sumula" element={<Protected><ConfigurarSumula /></Protected>} />
           <Route path="/dashboard/co-adms" element={<Protected><CoAdmins /></Protected>} />
           <Route path="/campeonato/:id" element={<PublicChampionship />} />

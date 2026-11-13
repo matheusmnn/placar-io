@@ -104,6 +104,8 @@ export interface Campeonato {
   pontosEmpate: number;
   idaVolta: boolean;
   koDesempate: KoDesempate;
+  duracaoPrimeiroTempo: number;
+  duracaoSegundoTempo: number;
   numGrupos: number | null;
   avancamPorGrupo: number | null;
   criteriosDesempate: CriterioDesempate[] | null;
@@ -233,6 +235,8 @@ export interface ArbitroCampeonato {
 export interface PartidaDetalhe {
   partida: Partida;
   sumulaConfig: SumulaConfig;
+  duracaoPrimeiroTempo: number;
+  duracaoSegundoTempo: number;
   arbitragem?: Arbitragem;
   cronologia?: Cronologia;
   observacoes?: ObservacoesPartida;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, ExternalLink, Loader2, Pencil, Plus, Trash2, Save, X } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Loader2, Pencil, Plus, Trash2, Save, X, Radio } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -188,7 +188,20 @@ export function RegisterResult() {
           </div>
         )}
 
-        <HeaderSumula partida={partida} salvar={salvarEDepoisRecarregar} />
+        {partida.status !== 'CONCLUIDA' && (
+          <button
+            onClick={() => navigate('/dashboard/ao-vivo')}
+            className="w-full rounded-md border border-brand/40 bg-brand/10 hover:bg-brand/20 text-foreground px-4 py-3 mb-4 flex items-center justify-between text-sm transition-colors"
+          >
+            <span className="flex items-center gap-2 font-semibold">
+              <Radio className="w-4 h-4 text-brand" />
+              {partida.status === 'EM_ANDAMENTO' ? 'Voltar pro modo ao vivo' : 'Abrir modo ao vivo'}
+            </span>
+            <span className="text-xs text-muted-foreground">placar, cronômetro e eventos em tempo real</span>
+          </button>
+        )}
+
+        <HeaderSumula partida={partida} salvar={salvarEDepoisRecarregar} duracao1T={det.duracaoPrimeiroTempo} duracao2T={det.duracaoSegundoTempo} />
 
         {secaoLigada('arbitragem', det.sumulaConfig) && <ArbitragemSection
           partidaId={partida.id}
@@ -306,7 +319,7 @@ function secaoLigada(id: SumulaSecao, cfg: SumulaConfig | undefined): boolean {
 }
 
 /* ---- Cabeçalho ---- */
-function HeaderSumula({ partida, salvar }: { partida: Partida; salvar: (fn: () => Promise<unknown>) => Promise<void> }) {
+function HeaderSumula({ partida, salvar, duracao1T, duracao2T }: { partida: Partida; salvar: (fn: () => Promise<unknown>) => Promise<void>; duracao1T: number; duracao2T: number }) {
   const titulo = partida.fase ?? `Rodada ${partida.rodada}`;
   const [edit, setEdit] = useState(false);
   const toDateInput = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
@@ -395,6 +408,10 @@ function HeaderSumula({ partida, salvar }: { partida: Partida; salvar: (fn: () =
           {edit ? (
             <Input value={transmissao} onChange={(e) => setTransmissao(e.target.value)} placeholder='YouTube do canal, ou link https://...' className="h-8 text-sm" />
           ) : transmissaoNode}
+        </div>
+        <div>
+          <p className="text-muted-foreground">Tempo de jogo</p>
+          <p className="text-foreground font-semibold">{duracao1T}&apos; + {duracao2T}&apos;</p>
         </div>
       </div>
     </div>

@@ -298,21 +298,14 @@ sumulaRouter.put(
   asyncHandler(async (req, res) => {
     const p = await carregarPartidaEditavel(req);
     const data = cronologiaSchema.parse(req.body);
-    const atualizada = await prisma.partida.update({
-      where: { id: p.id },
-      data: {
-        entradaMandante: toDateOrNull(data.entradaMandante),
-        entradaVisitante: toDateOrNull(data.entradaVisitante),
-        inicio1T: toDateOrNull(data.inicio1T),
-        termino1T: toDateOrNull(data.termino1T),
-        acrescimo1T: data.acrescimo1T ?? null,
-        inicio2T: toDateOrNull(data.inicio2T),
-        termino2T: toDateOrNull(data.termino2T),
-        acrescimo2T: data.acrescimo2T ?? null,
-        placar1TMandante: data.placar1TMandante ?? null,
-        placar1TVisitante: data.placar1TVisitante ?? null,
-      },
-    });
+    const promoveEmAndamento = p.status === 'AGENDADA' && data.inicio1T != null;
+    const patch = {};
+    const dataKeys = ['entradaMandante', 'entradaVisitante', 'inicio1T', 'termino1T', 'inicio2T', 'termino2T'];
+    const intKeys = ['acrescimo1T', 'acrescimo2T', 'placar1TMandante', 'placar1TVisitante'];
+    for (const k of dataKeys) if (k in data) patch[k] = toDateOrNull(data[k]);
+    for (const k of intKeys) if (k in data) patch[k] = data[k] ?? null;
+    if (promoveEmAndamento) patch.status = 'EM_ANDAMENTO';
+    const atualizada = await prisma.partida.update({ where: { id: p.id }, data: patch });
     res.json(atualizada);
   }),
 );

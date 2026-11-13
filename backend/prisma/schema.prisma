@@ -108,6 +108,8 @@ model Campeonato {
   pontosEmpate  Int              @default(1)
   idaVolta      Boolean          @default(false)
   koDesempate   KoDesempate      @default(PENALTIS)
+  duracaoPrimeiroTempo Int       @default(45)
+  duracaoSegundoTempo  Int       @default(45)
   numGrupos          Int?
   avancamPorGrupo    Int?
   criteriosDesempate Json?
