@@ -425,11 +425,13 @@ export const api = {
     request<Rodada[]>(`/campeonatos/${campeonatoId}/gerar-rodadas`, { method: 'POST' }),
   listarPartidas: (campeonatoId: number) => request<Rodada[]>(`/campeonatos/${campeonatoId}/partidas`),
   criarPartida: (campeonatoId: number, data: {
-    mandanteId: number; visitanteId: number; rodada: number; dataPartida?: string | null;
+    mandanteId?: number | null; visitanteId?: number | null; rodada: number; dataPartida?: string | null;
   }) => request<Partida>(`/campeonatos/${campeonatoId}/partidas`, { method: 'POST', body: body(data) }),
   atualizarPartida: (partidaId: number, data: {
     mandanteId?: number; visitanteId?: number; rodada?: number;
   }) => request<Partida>(`/partidas/${partidaId}`, { method: 'PATCH', body: body(data) }),
+  gerarChaveManual: (campeonatoId: number) =>
+    request<Rodada[]>(`/campeonatos/${campeonatoId}/chave-manual`, { method: 'POST' }),
   removerPartida: (partidaId: number) => request<void>(`/partidas/${partidaId}`, { method: 'DELETE' }),
   clonarRodadaVolta: (campeonatoId: number, rodada: number) =>
     request<{ rodada: number; criadas: number }>(

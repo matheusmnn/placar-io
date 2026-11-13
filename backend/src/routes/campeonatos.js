@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authRequired } from '../middleware/auth.js';
 import { asyncHandler, badRequest, conflict, forbidden, notFound } from '../lib/http.js';
-import { gerarRodadas, listarRodadas } from '../services/partida.js';
+import { gerarRodadas, listarRodadas, gerarChaveManual } from '../services/partida.js';
 import {
   assertPermissaoCampeonato,
   assertLeituraCampeonato,
@@ -389,6 +389,15 @@ campeonatosRouter.post(
   }),
 );
 
+campeonatosRouter.post(
+  '/:id/chave-manual',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await getCamp(req.userId, id, 'calendario');
+    res.json(await gerarChaveManual(id));
+  }),
+);
+
 campeonatosRouter.get(
   '/:id/partidas',
   asyncHandler(async (req, res) => {
@@ -415,8 +424,8 @@ async function assertAmbosInscritos(campeonatoId, mandanteId, visitanteId) {
 }
 
 const partidaManualSchema = z.object({
-  mandanteId: z.number().int().positive(),
-  visitanteId: z.number().int().positive(),
+  mandanteId: z.number().int().positive().nullable().optional(),
+  visitanteId: z.number().int().positive().nullable().optional(),
   rodada: z.number().int().min(1).max(500),
   dataPartida: z.string().datetime().nullable().optional(),
 });
@@ -428,12 +437,14 @@ campeonatosRouter.post(
     const c = await getCamp(req.userId, id, 'calendario');
     assertFormatoManual(c);
     const data = partidaManualSchema.parse(req.body);
-    await assertAmbosInscritos(id, data.mandanteId, data.visitanteId);
+    if (data.mandanteId != null && data.visitanteId != null) {
+      await assertAmbosInscritos(id, data.mandanteId, data.visitanteId);
+    }
     const criada = await prisma.partida.create({
       data: {
         campeonatoId: id,
-        mandanteId: data.mandanteId,
-        visitanteId: data.visitanteId,
+        mandanteId: data.mandanteId ?? null,
+        visitanteId: data.visitanteId ?? null,
         rodada: data.rodada,
         dataPartida: data.dataPartida ? new Date(data.dataPartida) : null,
       },

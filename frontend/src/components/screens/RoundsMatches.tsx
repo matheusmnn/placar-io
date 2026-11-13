@@ -40,7 +40,6 @@ export function RoundsMatches() {
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
-  const [addRodada, setAddRodada] = useState<number | null>(null);
   const [sorteio, setSorteio] = useState<{ tipo: 'tudo' | 'rodada'; rodada?: number } | null>(null);
 
   const editavel = camp?.formato === 'PONTOS_CORRIDOS';
@@ -94,6 +93,33 @@ export function RoundsMatches() {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível gerar as rodadas');
     } finally {
       setGerando(false);
+    }
+  }
+
+  async function gerarChaveVazia() {
+    if (!ativo) return;
+    setErro(null);
+    setGerando(true);
+    try {
+      await api.gerarChaveManual(ativo.id);
+      await carregar();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível criar a chave');
+    } finally {
+      setGerando(false);
+    }
+  }
+
+  async function adicionarSlotVazio(rodada: number) {
+    if (!ativo) return;
+    setErro(null);
+    try {
+      await api.criarPartida(ativo.id, { rodada });
+      await carregar();
+      const alvo = rodada - 1;
+      if (alvo >= 0 && alvo < rodadas.length + 1) setIdx(alvo);
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível criar a partida');
     }
   }
 
@@ -195,10 +221,16 @@ export function RoundsMatches() {
             </p>
             <div className="flex items-center justify-center gap-2">
               <Button onClick={gerar} disabled={gerando}>
-                {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Gerar rodadas
+                {gerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shuffle className="h-4 w-4" />}
+                {camp?.formato === 'MATA_MATA' ? 'Gerar chave aleatória' : 'Gerar rodadas (aleatório)'}
               </Button>
+              {camp?.formato === 'MATA_MATA' && (
+                <Button variant="outline" onClick={gerarChaveVazia} disabled={gerando}>
+                  <Plus className="h-4 w-4" /> Preencher manualmente
+                </Button>
+              )}
               {editavel && (
-                <Button variant="outline" onClick={() => setAddRodada(1)}>
+                <Button variant="outline" onClick={() => adicionarSlotVazio(1)}>
                   <Plus className="h-4 w-4" /> Criar manualmente
                 </Button>
               )}
@@ -235,7 +267,7 @@ export function RoundsMatches() {
 
             {editavel && atual && (
               <div className="flex items-center gap-2 mb-3 text-xs">
-                <Button size="sm" variant="outline" onClick={() => setAddRodada(rodadaAtualNumero)}>
+                <Button size="sm" variant="outline" onClick={() => adicionarSlotVazio(rodadaAtualNumero)}>
                   <Plus className="h-3.5 w-3.5" /> Adicionar partida
                 </Button>
                 <Button
@@ -295,7 +327,7 @@ export function RoundsMatches() {
               })}
               {editavel && (
                 <button
-                  onClick={() => setAddRodada(maxRodada + 1)}
+                  onClick={() => adicionarSlotVazio(maxRodada + 1)}
                   className="h-8 w-8 rounded-sm border border-dashed border-foreground/30 text-foreground/50 hover:border-foreground/60 hover:text-foreground flex items-center justify-center"
                   title="Nova rodada"
                 >
@@ -320,24 +352,6 @@ export function RoundsMatches() {
           />
         )}
 
-        {addRodada != null && ativo && (
-          <AdicionarPartidaDialog
-            campeonatoId={ativo.id}
-            rodadaInicial={addRodada}
-            times={times}
-            timesOcupados={timesOcupados}
-            onFechar={() => setAddRodada(null)}
-            onCriada={async (rodada) => {
-              setAddRodada(null);
-              await carregar();
-              setRodadas((rs) => {
-                const i = rs.findIndex((r) => r.partidas[0]?.rodada === rodada);
-                if (i >= 0) setIdx(i);
-                return rs;
-              });
-            }}
-          />
-        )}
       </div>
     </OrganizerLayout>
   );
@@ -416,27 +430,45 @@ function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, times, timesOcu
   const concluida = partida.status === 'CONCLUIDA';
   const emAndamento = partida.status === 'EM_ANDAMENTO';
   const podeEditar = editavel && partida.status === 'AGENDADA';
+  const emptyMandante = !partida.mandante;
+  const emptyVisitante = !partida.visitante;
+  const temVazio = emptyMandante || emptyVisitante;
+  const podeMexerSlots = partida.status === 'AGENDADA';
+  const clicavel = !temVazio;
   return (
     <div className="group w-full grid grid-cols-[1fr_auto_1fr_auto_auto] items-center gap-6 py-4 px-2 -mx-2 hover:bg-foreground/[0.02] transition-colors">
-      <button onClick={onAbrir} className="contents text-left cursor-pointer">
-        <div className="flex items-center gap-3 justify-end text-right min-w-0">
-          <span className="text-sm truncate">{partida.mandante?.nome ?? 'A definir'}</span>
-          <TeamShield nome={partida.mandante?.nome} cor={partida.mandante?.cor} abreviacao={partida.mandante?.abreviacao} escudoUrl={partida.mandante?.escudoUrl ?? null} size="sm" />
-        </div>
-        <div className="w-24 text-center">
-          {concluida && partida.golsMandante != null ? (
-            <p className="font-scoreboard text-2xl">
-              {partida.golsMandante} <span className="text-muted-foreground">–</span> {partida.golsVisitante}
-            </p>
-          ) : (
-            <p className="text-muted-foreground text-sm">×</p>
-          )}
-        </div>
-        <div className="flex items-center gap-3 min-w-0">
-          <TeamShield nome={partida.visitante?.nome} cor={partida.visitante?.cor} abreviacao={partida.visitante?.abreviacao} escudoUrl={partida.visitante?.escudoUrl ?? null} size="sm" />
-          <span className="text-sm truncate">{partida.visitante?.nome ?? 'A definir'}</span>
-        </div>
-      </button>
+      <div className="flex items-center gap-3 justify-end text-right min-w-0">
+        {emptyMandante && podeMexerSlots ? (
+          <SlotPicker partidaId={partida.id} times={times} ocupados={timesOcupados(partida.rodada, partida.id)} lado="mandante" onDone={onRecarregar} />
+        ) : (
+          <button onClick={clicavel ? onAbrir : undefined} disabled={!clicavel} className="flex items-center gap-3 min-w-0 disabled:cursor-default text-right">
+            <span className="text-sm truncate">{partida.mandante?.nome ?? 'A definir'}</span>
+            <TeamShield nome={partida.mandante?.nome} cor={partida.mandante?.cor} abreviacao={partida.mandante?.abreviacao} escudoUrl={partida.mandante?.escudoUrl ?? null} size="sm" />
+          </button>
+        )}
+      </div>
+      <div className="w-24 text-center">
+        {concluida && partida.golsMandante != null ? (
+          <button onClick={onAbrir} className="font-scoreboard text-2xl">
+            {partida.golsMandante} <span className="text-muted-foreground">–</span> {partida.golsVisitante}
+            {partida.penaltisMandante != null && partida.penaltisVisitante != null && (
+              <span className="block text-xs text-muted-foreground font-normal">({partida.penaltisMandante}–{partida.penaltisVisitante} pen)</span>
+            )}
+          </button>
+        ) : (
+          <button onClick={clicavel ? onAbrir : undefined} disabled={!clicavel} className="text-muted-foreground text-sm disabled:cursor-default">×</button>
+        )}
+      </div>
+      <div className="flex items-center gap-3 min-w-0">
+        {emptyVisitante && podeMexerSlots ? (
+          <SlotPicker partidaId={partida.id} times={times} ocupados={timesOcupados(partida.rodada, partida.id)} lado="visitante" onDone={onRecarregar} />
+        ) : (
+          <button onClick={clicavel ? onAbrir : undefined} disabled={!clicavel} className="flex items-center gap-3 min-w-0 disabled:cursor-default">
+            <TeamShield nome={partida.visitante?.nome} cor={partida.visitante?.cor} abreviacao={partida.visitante?.abreviacao} escudoUrl={partida.visitante?.escudoUrl ?? null} size="sm" />
+            <span className="text-sm truncate">{partida.visitante?.nome ?? 'A definir'}</span>
+          </button>
+        )}
+      </div>
       <div className="text-right text-xs text-muted-foreground min-w-[140px]">
         <EditorDataHora partida={partida} onAtualizar={onAtualizar} />
         {partida.local && <p>{partida.local}</p>}
@@ -448,6 +480,53 @@ function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, times, timesOcu
         <div className="w-8" />
       )}
     </div>
+  );
+}
+
+function SlotPicker({ partidaId, times, ocupados, lado, onDone }: {
+  partidaId: number; times: Time[]; ocupados: Set<number>;
+  lado: 'mandante' | 'visitante';
+  onDone: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const disponiveis = times.filter((t) => !ocupados.has(t.id));
+  async function escolher(timeId: number) {
+    setSalvando(true);
+    try {
+      await api.atualizarPartida(partidaId, lado === 'mandante' ? { mandanteId: timeId } : { visitanteId: timeId });
+      await onDone();
+      setOpen(false);
+    } finally { setSalvando(false); }
+  }
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="h-7 text-xs border-dashed">
+          <Plus className="w-3 h-3" /> Escolher time
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-2">
+        <p className="text-xs text-muted-foreground mb-2 px-1">Escolher {lado}</p>
+        {disponiveis.length === 0 ? (
+          <p className="text-xs text-muted-foreground px-1 py-2">Nenhum time livre nessa rodada.</p>
+        ) : (
+          <div className="max-h-56 overflow-y-auto space-y-0.5">
+            {disponiveis.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => escolher(t.id)}
+                disabled={salvando}
+                className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-foreground/5 flex items-center gap-2"
+              >
+                <TeamShield nome={t.nome} cor={t.cor} abreviacao={t.abreviacao} escudoUrl={t.escudoUrl} size="xs" />
+                <span className="truncate">{t.nome}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -530,104 +609,6 @@ function MenuPartida({ partida, times, timesOcupados, onRemover, onRecarregar }:
         </div>
       </PopoverContent>
     </Popover>
-  );
-}
-
-function AdicionarPartidaDialog({
-  campeonatoId,
-  rodadaInicial,
-  times,
-  timesOcupados,
-  onFechar,
-  onCriada,
-}: {
-  campeonatoId: number;
-  rodadaInicial: number;
-  times: Time[];
-  timesOcupados: TimesOcupadosFn;
-  onFechar: () => void;
-  onCriada: (rodada: number) => Promise<void>;
-}) {
-  const [mandanteId, setMandanteId] = useState<number>(0);
-  const [visitanteId, setVisitanteId] = useState<number>(0);
-  const [rodada, setRodada] = useState<number>(rodadaInicial);
-  const [data, setData] = useState('');
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const ocupados = timesOcupados(rodada);
-
-  async function salvar() {
-    setErro(null);
-    setSalvando(true);
-    try {
-      await api.criarPartida(campeonatoId, {
-        mandanteId,
-        visitanteId,
-        rodada,
-        dataPartida: data ? new Date(data).toISOString() : null,
-      });
-      await onCriada(rodada);
-    } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao criar partida');
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onFechar}>
-      <div className="bg-card border border-border rounded-lg p-6 w-full max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-xl">Adicionar partida</h2>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Mandante</label>
-            <select
-              value={mandanteId}
-              onChange={(e) => setMandanteId(Number(e.target.value))}
-              className="w-full h-10 rounded-md border border-input bg-background px-2 text-sm"
-            >
-              <option value={0} disabled>Selecione</option>
-              {times.map((t) => <option key={t.id} value={t.id} disabled={t.id === visitanteId || ocupados.has(t.id)}>{t.nome}{ocupados.has(t.id) ? ' (já joga nessa rodada)' : ''}</option>)}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Visitante</label>
-            <select
-              value={visitanteId}
-              onChange={(e) => setVisitanteId(Number(e.target.value))}
-              className="w-full h-10 rounded-md border border-input bg-background px-2 text-sm"
-            >
-              <option value={0} disabled>Selecione</option>
-              {times.map((t) => <option key={t.id} value={t.id} disabled={t.id === mandanteId || ocupados.has(t.id)}>{t.nome}{ocupados.has(t.id) ? ' (já joga nessa rodada)' : ''}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Rodada</label>
-            <Input type="number" min={1} value={rodada} onChange={(e) => setRodada(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Data (opcional)</label>
-            <Input type="datetime-local" value={data} onChange={(e) => setData(e.target.value)} />
-          </div>
-        </div>
-
-        {erro && <p className="text-xs text-destructive">{erro}</p>}
-
-        <div className="flex items-center justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={onFechar}>Cancelar</Button>
-          <Button
-            disabled={salvando || !mandanteId || !visitanteId || mandanteId === visitanteId || rodada < 1}
-            onClick={salvar}
-          >
-            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Adicionar'}
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
 

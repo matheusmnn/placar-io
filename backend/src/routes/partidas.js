@@ -94,11 +94,18 @@ partidasRouter.patch(
     const id = Number(req.params.id);
     const atual = await assertOwnedPartida(req.userId, id);
     if (atual.status !== 'AGENDADA') throw badRequest('Só partidas agendadas podem ser editadas');
-    if (atual.grupoId != null || atual.fase != null) throw badRequest('Partida de grupo/fase não pode ser editada manualmente');
     const data = patchSchema.parse(req.body);
-    const mandanteId = data.mandanteId ?? atual.mandanteId;
-    const visitanteId = data.visitanteId ?? atual.visitanteId;
-    await assertTimesInscritos(atual.campeonatoId, mandanteId, visitanteId);
+    const mudaRodada = data.rodada != null;
+    const mudaTime = data.mandanteId != null || data.visitanteId != null;
+    const ehFaseOuGrupo = atual.grupoId != null || atual.fase != null;
+    if (mudaRodada && ehFaseOuGrupo) {
+      throw badRequest('Rodada só pode ser mudada em partidas de pontos corridos');
+    }
+    if (mudaTime) {
+      const mandanteId = data.mandanteId ?? atual.mandanteId;
+      const visitanteId = data.visitanteId ?? atual.visitanteId;
+      await assertTimesInscritos(atual.campeonatoId, mandanteId, visitanteId);
+    }
     const atualizada = await prisma.partida.update({
       where: { id },
       data: {

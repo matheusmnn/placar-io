@@ -9,6 +9,35 @@ import { construirPlayoff, PLAYOFF_PADRAO_PCMM } from './playoff.js';
 const FORMATOS_COM_KO = new Set(['MATA_MATA', 'GRUPOS_MATA_MATA', 'PONTOS_CORRIDOS_MATA_MATA']);
 const FORMATOS_COM_GRUPOS = new Set(['GRUPOS', 'GRUPOS_MATA_MATA']);
 
+export async function gerarChaveManual(campeonatoId) {
+  const camp = await prisma.campeonato.findUnique({ where: { id: campeonatoId } });
+  if (!camp) throw badRequest('Campeonato não encontrado');
+  if (camp.formato !== 'MATA_MATA') {
+    throw badRequest('Chave manual disponível só em mata-mata');
+  }
+  const inscritos = await prisma.inscricaoCampeonato.count({ where: { campeonatoId } });
+  if (inscritos < 2) throw badRequest('Inscreva pelo menos 2 times antes de montar a chave');
+
+  await prisma.partida.deleteMany({ where: { campeonatoId } });
+
+  const size = proximaPotenciaDeDois(inscritos);
+  const label = faseLabel(size);
+  const pares = size / 2;
+  // shortcut: chave manual sempre single-leg; se o camp era idaVolta,
+  // o manual simplifica para um jogo só por confronto. Ampliar quando
+  // a UI souber emparelhar legs.
+  for (let i = 0; i < pares; i++) {
+    await prisma.partida.create({
+      data: {
+        campeonatoId, mandanteId: null, visitanteId: null,
+        rodada: 1, fase: label, ordemFase: i, legOrdem: null,
+      },
+    });
+  }
+  await prisma.campeonato.update({ where: { id: campeonatoId }, data: { status: 'EM_ANDAMENTO' } });
+  return listarRodadas(campeonatoId);
+}
+
 export async function gerarRodadas(campeonatoId) {
   const camp = await prisma.campeonato.findUnique({ where: { id: campeonatoId } });
   if (!camp) throw badRequest('Campeonato não encontrado');
