@@ -90,6 +90,30 @@ export function LiveMatch() {
     }
   }
 
+  const eventos = useMemo(() => {
+    if (!det || !det.partida.mandante || !det.partida.visitante) return [];
+    const mand = det.partida.mandante;
+    const vis = det.partida.visitante;
+    const evs: { id: string; seg: number; label: string; timeNome: string; onDel: () => Promise<unknown> }[] = [];
+    for (const g of det.gols) {
+      const seg = g.tempoSegundos ?? (g.minuto != null ? g.minuto * 60 : 0);
+      const t = g.timeId === mand.id ? mand.nome : vis.nome;
+      evs.push({ id: 'g' + g.id, seg, label: `⚽ ${g.jogadorApelido ?? g.jogadorNome ?? 'gol'}`, timeNome: t, onDel: () => api.excluirGol(g.id) });
+    }
+    for (const c of det.cartoes) {
+      const seg = c.tempoSegundos ?? (c.minuto != null ? c.minuto * 60 : 0);
+      const t = c.timeId === mand.id ? mand.nome : vis.nome;
+      const sym = c.tipo === 'AMARELO' ? '🟨' : '🟥';
+      evs.push({ id: 'c' + c.id, seg, label: `${sym} ${c.jogadorApelido ?? c.jogadorNome ?? 'cartão'}`, timeNome: t, onDel: () => api.excluirCartao(c.id) });
+    }
+    for (const s of det.substituicoes ?? []) {
+      const seg = s.tempoSegundos ?? 0;
+      const t = s.timeId === mand.id ? mand.nome : vis.nome;
+      evs.push({ id: 's' + s.id, seg, label: `🔁 ${s.entrou.nome} ← ${s.saiu.nome}`, timeNome: t, onDel: () => api.excluirSubstituicao(s.id) });
+    }
+    return evs.sort((a, b) => b.seg - a.seg);
+  }, [det]);
+
   if (loading || !det || !det.partida.mandante || !det.partida.visitante) {
     return (
       <OrganizerLayout>
@@ -156,27 +180,6 @@ export function LiveMatch() {
     const campo = fase === '1T' ? 'acrescimo1T' : 'acrescimo2T';
     await withBusy(() => api.salvarCronologia(partida.id, { [campo]: v }));
   }
-
-  const eventos = useMemo(() => {
-    const evs: { id: string; seg: number; label: string; timeNome: string; onDel: () => Promise<unknown> }[] = [];
-    for (const g of det.gols) {
-      const seg = g.tempoSegundos ?? (g.minuto != null ? g.minuto * 60 : 0);
-      const t = g.timeId === mandante.id ? mandante.nome : visitante.nome;
-      evs.push({ id: 'g' + g.id, seg, label: `⚽ ${g.jogadorApelido ?? g.jogadorNome ?? 'gol'}`, timeNome: t, onDel: () => api.excluirGol(g.id) });
-    }
-    for (const c of det.cartoes) {
-      const seg = c.tempoSegundos ?? (c.minuto != null ? c.minuto * 60 : 0);
-      const t = c.timeId === mandante.id ? mandante.nome : visitante.nome;
-      const sym = c.tipo === 'AMARELO' ? '🟨' : '🟥';
-      evs.push({ id: 'c' + c.id, seg, label: `${sym} ${c.jogadorApelido ?? c.jogadorNome ?? 'cartão'}`, timeNome: t, onDel: () => api.excluirCartao(c.id) });
-    }
-    for (const s of det.substituicoes ?? []) {
-      const seg = s.tempoSegundos ?? 0;
-      const t = s.timeId === mandante.id ? mandante.nome : visitante.nome;
-      evs.push({ id: 's' + s.id, seg, label: `🔁 ${s.entrou.nome} ← ${s.saiu.nome}`, timeNome: t, onDel: () => api.excluirSubstituicao(s.id) });
-    }
-    return evs.sort((a, b) => b.seg - a.seg);
-  }, [det.gols, det.cartoes, det.substituicoes, mandante.id, mandante.nome, visitante.id, visitante.nome]);
 
   const timerLabel = fase === 'aguardando' ? 'Partida agendada'
     : fase === '1T' ? `${fmtMMSS(segRodando)} · 1º tempo`
