@@ -7,7 +7,7 @@ import { Input } from '../ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { OrganizerLayout } from '../OrganizerLayout';
 import { TeamShield } from '../TeamShield';
-import { api, ApiError, Campeonato, Partida, Rodada, Time } from '../../lib/api';
+import { api, ApiError, Campeonato, Partida, Rodada, Time, TimeResumo } from '../../lib/api';
 import { campeonatoAtivo, partidaAtiva } from '../../lib/session';
 
 function formatarDataHora(iso: string | null): string {
@@ -213,6 +213,11 @@ export function RoundsMatches() {
                 <Shuffle className="h-3.5 w-3.5" /> Sortear tudo
               </Button>
             )}
+            {camp?.formato === 'MATA_MATA' && rodadas.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={gerar} disabled={gerando}>
+                <Shuffle className="h-3.5 w-3.5" /> Sortear tudo
+              </Button>
+            )}
             {ativo && (
               <Button size="sm" variant="outline" onClick={() => navigate(`/campeonato/${ativo.id}`)}>
                 <ExternalLink className="h-3.5 w-3.5" /> Ver público
@@ -308,7 +313,16 @@ export function RoundsMatches() {
               </div>
             )}
 
-            {atual && (
+            {atual && camp?.formato === 'MATA_MATA' ? (
+              <BracketView
+                rodadas={rodadas}
+                totalTimes={times.length}
+                times={times}
+                timesOcupados={timesOcupados}
+                onAbrir={abrirSumula}
+                onRecarregar={carregar}
+              />
+            ) : atual ? (
               <div className="divide-y divide-border border-y border-border">
                 <ListaPartidasAdmin
                   partidas={atual.partidas}
@@ -321,39 +335,41 @@ export function RoundsMatches() {
                   onRecarregar={carregar}
                 />
               </div>
-            )}
+            ) : null}
 
-            <div className="mt-8 flex flex-wrap items-center gap-1">
-              {rodadas.map((r, i) => {
-                const t = r.partidas.length;
-                const f = r.partidas.filter((p) => p.status === 'CONCLUIDA').length;
-                const estado = f === t ? 'done' : f > 0 ? 'partial' : i === idx ? 'current' : 'empty';
-                return (
+            {camp?.formato !== 'MATA_MATA' && (
+              <div className="mt-8 flex flex-wrap items-center gap-1">
+                {rodadas.map((r, i) => {
+                  const t = r.partidas.length;
+                  const f = r.partidas.filter((p) => p.status === 'CONCLUIDA').length;
+                  const estado = f === t ? 'done' : f > 0 ? 'partial' : i === idx ? 'current' : 'empty';
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setIdx(i)}
+                      className={`h-8 w-8 rounded-sm text-xs font-scoreboard transition-colors ${
+                        estado === 'done' ? 'bg-foreground text-background' :
+                        estado === 'partial' ? 'bg-brand text-background' :
+                        estado === 'current' ? 'border border-foreground text-foreground' :
+                        'border border-border text-muted-foreground hover:border-foreground/30'
+                      }`}
+                      title={`Rodada ${i + 1}`}
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
+                {editavel && (
                   <button
-                    key={i}
-                    onClick={() => setIdx(i)}
-                    className={`h-8 w-8 rounded-sm text-xs font-scoreboard transition-colors ${
-                      estado === 'done' ? 'bg-foreground text-background' :
-                      estado === 'partial' ? 'bg-brand text-background' :
-                      estado === 'current' ? 'border border-foreground text-foreground' :
-                      'border border-border text-muted-foreground hover:border-foreground/30'
-                    }`}
-                    title={`Rodada ${i + 1}`}
+                    onClick={() => adicionarSlotVazio(maxRodada + 1)}
+                    className="h-8 w-8 rounded-sm border border-dashed border-foreground/30 text-foreground/50 hover:border-foreground/60 hover:text-foreground flex items-center justify-center"
+                    title="Nova rodada"
                   >
-                    {i + 1}
+                    <Plus className="h-3 w-3" />
                   </button>
-                );
-              })}
-              {editavel && (
-                <button
-                  onClick={() => adicionarSlotVazio(maxRodada + 1)}
-                  className="h-8 w-8 rounded-sm border border-dashed border-foreground/30 text-foreground/50 hover:border-foreground/60 hover:text-foreground flex items-center justify-center"
-                  title="Nova rodada"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
@@ -498,6 +514,160 @@ function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, times, timesOcu
       ) : (
         <div className="w-8" />
       )}
+    </div>
+  );
+}
+
+function nextPow2(n: number): number { let p = 1; while (p < n) p *= 2; return p; }
+function faseLabelForMatches(timesNaFase: number): string {
+  switch (timesNaFase) {
+    case 1: case 2: return 'Final';
+    case 4: return 'Semifinal';
+    case 8: return 'Quartas';
+    case 16: return 'Oitavas';
+    default: return `${Math.floor(timesNaFase / 2)}-avos`;
+  }
+}
+
+function BracketView({ rodadas, totalTimes, times, timesOcupados, onAbrir, onRecarregar }: {
+  rodadas: Rodada[];
+  totalTimes: number;
+  times: Time[];
+  timesOcupados: TimesOcupadosFn;
+  onAbrir: (p: Partida) => void;
+  onRecarregar: () => Promise<void>;
+}) {
+  const size = Math.max(2, nextPow2(totalTimes));
+  const totalFases = Math.max(1, Math.log2(size));
+  const colunas: { titulo: string; partidas: Partida[]; placeholder?: boolean }[] = [];
+  for (let i = 0; i < totalFases; i++) {
+    const r = rodadas[i];
+    if (r) {
+      colunas.push({ titulo: r.titulo, partidas: r.partidas });
+    } else {
+      const timesNaFase = size / 2 ** i;
+      const pares = timesNaFase / 2;
+      colunas.push({
+        titulo: faseLabelForMatches(timesNaFase),
+        partidas: Array.from({ length: pares }).map(() => null as unknown as Partida),
+        placeholder: true,
+      });
+    }
+  }
+
+  return (
+    <div className="flex gap-6 overflow-x-auto pb-6">
+      {colunas.map((col, i) => (
+        <div key={i} className="w-60 shrink-0">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-3 text-center">{col.titulo}</p>
+          <div className="flex flex-col justify-around" style={{ minHeight: 520 }}>
+            {col.partidas.map((p, j) => (
+              col.placeholder || !p ? (
+                <PlaceholderMatch key={j} />
+              ) : (
+                <BracketMatch
+                  key={p.id}
+                  partida={p}
+                  times={times}
+                  ocupados={timesOcupados(p.rodada, p.id)}
+                  onAbrir={() => onAbrir(p)}
+                  onRecarregar={onRecarregar}
+                />
+              )
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BracketMatch({ partida, times, ocupados, onAbrir, onRecarregar }: {
+  partida: Partida; times: Time[]; ocupados: Set<number>;
+  onAbrir: () => void; onRecarregar: () => Promise<void>;
+}) {
+  const concluida = partida.status === 'CONCLUIDA';
+  const podeMexer = partida.status === 'AGENDADA';
+  const clicavel = partida.mandante && partida.visitante;
+  return (
+    <div className="rounded-md border border-border bg-card my-2 overflow-hidden">
+      <BracketSlot
+        partidaId={partida.id}
+        time={partida.mandante}
+        placar={concluida ? partida.golsMandante : null}
+        podeMexer={podeMexer}
+        lado="mandante"
+        times={times}
+        ocupados={ocupados}
+        onPreenchido={onRecarregar}
+        onAbrirSumula={clicavel ? onAbrir : undefined}
+      />
+      <div className="h-px bg-border" />
+      <BracketSlot
+        partidaId={partida.id}
+        time={partida.visitante}
+        placar={concluida ? partida.golsVisitante : null}
+        podeMexer={podeMexer}
+        lado="visitante"
+        times={times}
+        ocupados={ocupados}
+        onPreenchido={onRecarregar}
+        onAbrirSumula={clicavel ? onAbrir : undefined}
+      />
+      {concluida && partida.penaltisMandante != null && partida.penaltisVisitante != null && (
+        <p className="text-[10px] text-muted-foreground text-center py-1 border-t border-border">
+          pên {partida.penaltisMandante}–{partida.penaltisVisitante}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function BracketSlot({ partidaId, time, placar, podeMexer, lado, times, ocupados, onPreenchido, onAbrirSumula }: {
+  partidaId: number;
+  time: TimeResumo | null;
+  placar: number | null;
+  podeMexer: boolean;
+  lado: 'mandante' | 'visitante';
+  times: Time[];
+  ocupados: Set<number>;
+  onPreenchido: () => Promise<void>;
+  onAbrirSumula?: () => void;
+}) {
+  if (!time && podeMexer) {
+    return (
+      <div className="px-2 py-2">
+        <SlotPicker partidaId={partidaId} times={times} ocupados={ocupados} lado={lado} onDone={onPreenchido} />
+      </div>
+    );
+  }
+  return (
+    <button
+      onClick={onAbrirSumula}
+      disabled={!onAbrirSumula}
+      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-foreground/[0.03] disabled:cursor-default"
+    >
+      <span className="flex items-center gap-2 min-w-0">
+        {time ? (
+          <>
+            <TeamShield nome={time.nome} cor={time.cor} abreviacao={time.abreviacao} escudoUrl={time.escudoUrl} size="xs" />
+            <span className="truncate">{time.nome}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground text-xs italic">a definir</span>
+        )}
+      </span>
+      {placar != null && <span className="font-scoreboard">{placar}</span>}
+    </button>
+  );
+}
+
+function PlaceholderMatch() {
+  return (
+    <div className="rounded-md border border-dashed border-border bg-card/40 my-2 opacity-60">
+      <div className="px-3 py-2 text-xs text-muted-foreground italic">a definir</div>
+      <div className="h-px bg-border" />
+      <div className="px-3 py-2 text-xs text-muted-foreground italic">a definir</div>
     </div>
   );
 }

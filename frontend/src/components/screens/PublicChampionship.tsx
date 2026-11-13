@@ -444,7 +444,14 @@ function LinhaPartidaCompacta({ partida }: { partida: Partida }) {
           <TeamShield nome={partida.mandante?.nome} cor={partida.mandante?.cor} abreviacao={partida.mandante?.abreviacao} escudoUrl={partida.mandante?.escudoUrl ?? null} size="sm" />
         </div>
         <div className="font-scoreboard text-base w-14 text-center shrink-0">
-          {concluida ? <span>{gm}<span className="text-muted-foreground px-0.5">–</span>{gv}</span> : <span className="text-muted-foreground">×</span>}
+          {concluida ? (
+            <span>
+              {gm}<span className="text-muted-foreground px-0.5">–</span>{gv}
+              {partida.penaltisMandante != null && partida.penaltisVisitante != null && (
+                <span className="block text-[10px] text-muted-foreground font-normal leading-tight">({partida.penaltisMandante}–{partida.penaltisVisitante} pen)</span>
+              )}
+            </span>
+          ) : <span className="text-muted-foreground">×</span>}
         </div>
         <div className="flex items-center gap-2 min-w-0">
           <TeamShield nome={partida.visitante?.nome} cor={partida.visitante?.cor} abreviacao={partida.visitante?.abreviacao} escudoUrl={partida.visitante?.escudoUrl ?? null} size="sm" />
@@ -540,7 +547,14 @@ function LinhaPartida({ partida }: { partida: Partida }) {
         <TeamShield nome={partida.mandante?.nome} cor={partida.mandante?.cor} abreviacao={partida.mandante?.abreviacao} escudoUrl={partida.mandante?.escudoUrl ?? null} size="sm" />
       </div>
       <div className="font-scoreboard text-lg w-20 text-center">
-        {concluida ? <span>{gm} <span className="text-muted-foreground">–</span> {gv}</span> : <span className="text-muted-foreground">×</span>}
+        {concluida ? (
+          <span>
+            {gm} <span className="text-muted-foreground">–</span> {gv}
+            {partida.penaltisMandante != null && partida.penaltisVisitante != null && (
+              <span className="block text-[11px] text-muted-foreground font-normal leading-tight">({partida.penaltisMandante}–{partida.penaltisVisitante} pen)</span>
+            )}
+          </span>
+        ) : <span className="text-muted-foreground">×</span>}
       </div>
       <div className="flex items-center gap-3 min-w-0">
         <TeamShield nome={partida.visitante?.nome} cor={partida.visitante?.cor} abreviacao={partida.visitante?.abreviacao} escudoUrl={partida.visitante?.escudoUrl ?? null} size="sm" />
