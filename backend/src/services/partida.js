@@ -591,7 +591,7 @@ export async function detalhe(partidaId) {
         orderBy: [{ periodo: 'asc' }, { tempoSegundos: 'asc' }, { id: 'asc' }],
       },
       stats: true,
-      campeonato: { select: { id: true, sumulaConfig: true, duracaoPrimeiroTempo: true, duracaoSegundoTempo: true } },
+      campeonato: { select: { id: true, sumulaConfig: true, duracaoPrimeiroTempo: true, duracaoSegundoTempo: true, usaSumula: true } },
     },
   });
   if (!p) throw badRequest('Partida não encontrada');
@@ -611,6 +611,7 @@ export async function detalhe(partidaId) {
     sumulaConfig: p.campeonato?.sumulaConfig ?? { secoes: {}, subsecoes: {}, camposCustom: [] },
     duracaoPrimeiroTempo: p.campeonato?.duracaoPrimeiroTempo ?? 45,
     duracaoSegundoTempo: p.campeonato?.duracaoSegundoTempo ?? 45,
+    usaSumula: p.campeonato?.usaSumula ?? true,
     arbitragem: {
       juiz: p.juiz ?? null,
       assistente1: arbitrosExtras[p.assistente1Id] ?? null,

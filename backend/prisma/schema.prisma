@@ -110,6 +110,7 @@ model Campeonato {
   koDesempate   KoDesempate      @default(PENALTIS)
   duracaoPrimeiroTempo Int       @default(45)
   duracaoSegundoTempo  Int       @default(45)
+  usaSumula     Boolean          @default(true)
   numGrupos          Int?
   avancamPorGrupo    Int?
   criteriosDesempate Json?

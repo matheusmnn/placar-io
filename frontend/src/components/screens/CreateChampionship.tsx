@@ -70,6 +70,7 @@ export function CreateChampionship() {
   const [koDesempate, setKoDesempate] = useState<KoDesempate>('PENALTIS');
   const [duracao1T, setDuracao1T] = useState(45);
   const [duracao2T, setDuracao2T] = useState(45);
+  const [usaSumula, setUsaSumula] = useState(true);
   const [numGrupos, setNumGrupos] = useState(4);
   const [avancamPorGrupo, setAvancamPorGrupo] = useState(2);
   const [playoffTemplate, setPlayoffTemplate] = useState<keyof typeof PLAYOFF_TEMPLATES>('topQuatro');
@@ -96,6 +97,7 @@ export function CreateChampionship() {
         setKoDesempate(c.koDesempate);
         setDuracao1T(c.duracaoPrimeiroTempo);
         setDuracao2T(c.duracaoSegundoTempo);
+        setUsaSumula(c.usaSumula);
         if (c.numGrupos) setNumGrupos(c.numGrupos);
         if (c.avancamPorGrupo) setAvancamPorGrupo(c.avancamPorGrupo);
         if (c.criteriosDesempate && c.criteriosDesempate.length > 0) setCriterios(c.criteriosDesempate);
@@ -155,6 +157,7 @@ export function CreateChampionship() {
         koDesempate: opcao.temKO ? koDesempate : undefined,
         duracaoPrimeiroTempo: duracao1T,
         duracaoSegundoTempo: duracao2T,
+        usaSumula,
         numGrupos: opcao.grupos ? numGrupos : null,
         avancamPorGrupo: opcao.grupos ? avancamPorGrupo : null,
         playoff: opcao.playoff ? PLAYOFF_TEMPLATES[playoffTemplate].cfg : null,
@@ -318,6 +321,13 @@ export function CreateChampionship() {
                 <Input id="d2t" type="number" min={1} max={90} value={duracao2T} onChange={(e) => setDuracao2T(Number(e.target.value))} />
               </div>
             </div>
+          </Secao>
+
+          <Secao titulo="Súmula" ajuda="Se desligado, registrar resultado vira uma tela só com o placar. Também desabilita o modo ao vivo.">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={usaSumula} onChange={(e) => setUsaSumula(e.target.checked)} className="rounded border-foreground/20" />
+              Incluir súmula CBF (arbitragem, escalação, cronologia, cartões etc.)
+            </label>
           </Secao>
 
           <Secao titulo="Critérios de desempate" ajuda="Aplicados em ordem depois dos pontos.">

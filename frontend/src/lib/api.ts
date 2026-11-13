@@ -106,6 +106,7 @@ export interface Campeonato {
   koDesempate: KoDesempate;
   duracaoPrimeiroTempo: number;
   duracaoSegundoTempo: number;
+  usaSumula: boolean;
   numGrupos: number | null;
   avancamPorGrupo: number | null;
   criteriosDesempate: CriterioDesempate[] | null;
@@ -244,6 +245,7 @@ export interface PartidaDetalhe {
   sumulaConfig: SumulaConfig;
   duracaoPrimeiroTempo: number;
   duracaoSegundoTempo: number;
+  usaSumula: boolean;
   arbitragem?: Arbitragem;
   cronologia?: Cronologia;
   observacoes?: ObservacoesPartida;

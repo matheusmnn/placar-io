@@ -189,7 +189,7 @@ export function RegisterResult() {
           </div>
         )}
 
-        {partida.status !== 'CONCLUIDA' && (
+        {det.usaSumula && partida.status !== 'CONCLUIDA' && (
           <button
             onClick={() => navigate('/dashboard/ao-vivo')}
             className="w-full rounded-md border border-brand/40 bg-brand/10 hover:bg-brand/20 text-foreground px-4 py-3 mb-4 flex items-center justify-between text-sm transition-colors"
@@ -202,7 +202,22 @@ export function RegisterResult() {
           </button>
         )}
 
+        {!det.usaSumula && (
+          <SimpleScoreView
+            partida={partida}
+            salvando={salvando}
+            onSalvar={(data) => withBusy(async () => {
+              await api.fecharPlacar(partida.id, data);
+              navigate('/dashboard/rodadas');
+            })}
+            onPenaltisSaved={() => recarregar(partida.id)}
+          />
+        )}
+
+        {det.usaSumula && <>
         <HeaderSumula partida={partida} salvar={salvarEDepoisRecarregar} duracao1T={det.duracaoPrimeiroTempo} duracao2T={det.duracaoSegundoTempo} />
+
+
 
         {secaoLigada('arbitragem', det.sumulaConfig) && <ArbitragemSection
           partidaId={partida.id}
@@ -311,6 +326,7 @@ export function RegisterResult() {
             })
           }
         />}
+        </>}
       </div>
     </OrganizerLayout>
   );
@@ -1626,6 +1642,131 @@ function CamposCustomSection({
         ))}
       </div>
     </CBFSection>
+  );
+}
+
+/* ---- Tela simples (campeonato sem súmula) ---- */
+function SimpleScoreView({
+  partida, salvando, onSalvar, onPenaltisSaved,
+}: {
+  partida: Partida; salvando: boolean;
+  onSalvar: (data: {
+    golsMandante: number; golsVisitante: number;
+    prorrogacao?: boolean;
+    golsMandanteProrr?: number | null; golsVisitanteProrr?: number | null;
+    penaltisMandante?: number | null; penaltisVisitante?: number | null;
+  }) => Promise<unknown>;
+  onPenaltisSaved: () => void | Promise<void>;
+}) {
+  const [gm, setGm] = useState(partida.golsMandante ?? 0);
+  const [gv, setGv] = useState(partida.golsVisitante ?? 0);
+  const [temProrr, setTemProrr] = useState(partida.prorrogacao);
+  const [prorrGm, setProrrGm] = useState(partida.golsMandanteProrr != null ? String(partida.golsMandanteProrr) : '');
+  const [prorrGv, setProrrGv] = useState(partida.golsVisitanteProrr != null ? String(partida.golsVisitanteProrr) : '');
+  const [penM, setPenM] = useState(partida.penaltisMandante != null ? String(partida.penaltisMandante) : '');
+  const [penV, setPenV] = useState(partida.penaltisVisitante != null ? String(partida.penaltisVisitante) : '');
+  const [temPen, setTemPen] = useState(
+    partida.penaltisMandante != null || partida.penaltisVisitante != null || (partida.penaltisSerie?.length ?? 0) > 0,
+  );
+  const [modoPen, setModoPen] = useState<'resultado' | 'sequencia'>(
+    partida.penaltisSerie && partida.penaltisSerie.length > 0 ? 'sequencia' : 'resultado',
+  );
+  const mandante = partida.mandante;
+  const visitante = partida.visitante;
+  if (!mandante || !visitante) return null;
+
+  async function salvar() {
+    const empatado = gm === gv && !temPen;
+    if (empatado && !window.confirm(
+      `A partida está empatada (${gm} × ${gv}) e não há pênaltis. Em confrontos de ida e volta ou mata-mata, o empate pode não resolver o confronto. Encerrar mesmo assim?`
+    )) return;
+    await onSalvar({
+      golsMandante: gm,
+      golsVisitante: gv,
+      prorrogacao: temProrr,
+      golsMandanteProrr: temProrr && prorrGm !== '' ? Number(prorrGm) : null,
+      golsVisitanteProrr: temProrr && prorrGv !== '' ? Number(prorrGv) : null,
+      penaltisMandante: temPen && penM !== '' ? Number(penM) : null,
+      penaltisVisitante: temPen && penV !== '' ? Number(penV) : null,
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-6 space-y-6">
+      <h2 className="text-lg font-semibold">Resultado da partida</h2>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div className="text-center space-y-2">
+          <p className="text-sm font-semibold truncate">{mandante.nome}</p>
+          <PlacarContador label="" valor={gm} onChange={setGm} />
+        </div>
+        <span className="text-muted-foreground text-xl">×</span>
+        <div className="text-center space-y-2">
+          <p className="text-sm font-semibold truncate">{visitante.nome}</p>
+          <PlacarContador label="" valor={gv} onChange={setGv} />
+        </div>
+      </div>
+
+      <details className="pt-4 border-t border-border">
+        <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Prorrogação</summary>
+        <div className="mt-3 space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={temProrr} onChange={(e) => setTemProrr(e.target.checked)} className="h-4 w-4 accent-primary" />
+            Houve prorrogação
+          </label>
+          {temProrr && (
+            <div className="grid grid-cols-2 gap-2 max-w-sm">
+              <Input type="number" min={0} value={prorrGm} onChange={(e) => setProrrGm(e.target.value)} placeholder="Prorrog. mandante" className="h-9 text-sm" />
+              <Input type="number" min={0} value={prorrGv} onChange={(e) => setProrrGv(e.target.value)} placeholder="Prorrog. visitante" className="h-9 text-sm" />
+            </div>
+          )}
+        </div>
+      </details>
+
+      <details className="pt-4 border-t border-border" open={temPen}>
+        <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Pênaltis</summary>
+        <div className="mt-3 space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={temPen} onChange={(e) => setTemPen(e.target.checked)} className="h-4 w-4 accent-primary" />
+            Houve disputa de pênaltis
+          </label>
+          {temPen && (
+            <>
+              <div className="flex gap-1 text-xs">
+                <button type="button" onClick={() => setModoPen('resultado')} className={`px-2 py-0.5 rounded ${modoPen === 'resultado' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>Só resultado</button>
+                <button type="button" onClick={() => setModoPen('sequencia')} className={`px-2 py-0.5 rounded ${modoPen === 'sequencia' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>Cada cobrança</button>
+              </div>
+              {modoPen === 'resultado' ? (
+                <div className="grid grid-cols-2 gap-2 max-w-sm">
+                  <Input type="number" min={0} value={penM} onChange={(e) => setPenM(e.target.value)} placeholder="Pên. mandante" className="h-9 text-sm" />
+                  <Input type="number" min={0} value={penV} onChange={(e) => setPenV(e.target.value)} placeholder="Pên. visitante" className="h-9 text-sm" />
+                </div>
+              ) : (
+                <PenaltisEditor
+                  partidaId={partida.id}
+                  serie={partida.penaltisSerie ?? null}
+                  mandante={mandante}
+                  visitante={visitante}
+                  onSaved={async () => {
+                    await onPenaltisSaved();
+                    const m = (partida.penaltisSerie ?? []).filter((s) => s.time === 'M' && s.converteu).length;
+                    const v = (partida.penaltisSerie ?? []).filter((s) => s.time === 'V' && s.converteu).length;
+                    setPenM(String(m));
+                    setPenV(String(v));
+                  }}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </details>
+
+      <div className="flex justify-end">
+        <Button onClick={salvar} disabled={salvando} className="gap-1">
+          {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          Salvar resultado
+        </Button>
+      </div>
+    </div>
   );
 }
 

@@ -140,6 +140,11 @@ export function LiveMatch() {
   async function encerrarPartida() {
     const serie = partida.penaltisSerie ?? [];
     const temPen = serie.length > 0;
+    const empatado = golsMand === golsVis && !temPen;
+    if (empatado && !window.confirm(
+      `A partida está empatada (${golsMand} × ${golsVis}) e não há disputa de pênaltis registrada. ` +
+      `Em confrontos de ida e volta ou mata-mata, o empate pode não resolver o confronto. Encerrar mesmo assim?`
+    )) return;
     await withBusy(() => api.fecharPlacar(partida.id, {
       golsMandante: golsMand,
       golsVisitante: golsVis,
