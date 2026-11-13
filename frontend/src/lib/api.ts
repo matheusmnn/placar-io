@@ -432,6 +432,11 @@ export const api = {
   }) => request<Partida>(`/partidas/${partidaId}`, { method: 'PATCH', body: body(data) }),
   gerarChaveManual: (campeonatoId: number) =>
     request<Rodada[]>(`/campeonatos/${campeonatoId}/chave-manual`, { method: 'POST' }),
+  preencherSlotsVazios: (campeonatoId: number, rodada: number) =>
+    request<{ preenchidas: number; sobra: number }>(
+      `/campeonatos/${campeonatoId}/rodadas/${rodada}/preencher-slots`,
+      { method: 'POST' },
+    ),
   removerPartida: (partidaId: number) => request<void>(`/partidas/${partidaId}`, { method: 'DELETE' }),
   clonarRodadaVolta: (campeonatoId: number, rodada: number) =>
     request<{ rodada: number; criadas: number }>(

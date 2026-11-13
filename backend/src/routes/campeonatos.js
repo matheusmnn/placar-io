@@ -567,6 +567,50 @@ campeonatosRouter.post(
 );
 
 campeonatosRouter.post(
+  '/:id/rodadas/:n/preencher-slots',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const n = Number(req.params.n);
+    await getCamp(req.userId, id, 'calendario');
+    const partidas = await prisma.partida.findMany({
+      where: { campeonatoId: id, rodada: n, status: 'AGENDADA' },
+      orderBy: [{ fase: 'asc' }, { ordemFase: 'asc' }, { id: 'asc' }],
+      select: { id: true, mandanteId: true, visitanteId: true },
+    });
+    const inscritos = await prisma.inscricaoCampeonato.findMany({
+      where: { campeonatoId: id }, select: { timeId: true },
+    });
+    const ocupados = new Set();
+    for (const p of partidas) {
+      if (p.mandanteId) ocupados.add(p.mandanteId);
+      if (p.visitanteId) ocupados.add(p.visitanteId);
+    }
+    const livres = inscritos.map((i) => i.timeId).filter((t) => !ocupados.has(t));
+    for (let i = livres.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [livres[i], livres[j]] = [livres[j], livres[i]];
+    }
+    let cursor = 0;
+    let preenchidas = 0;
+    for (const p of partidas) {
+      const upd = {};
+      if (!p.mandanteId && cursor < livres.length) {
+        upd.mandanteId = livres[cursor++];
+      }
+      if (!p.visitanteId && cursor < livres.length) {
+        upd.visitanteId = livres[cursor++];
+      }
+      if (Object.keys(upd).length > 0) {
+        await prisma.partida.update({ where: { id: p.id }, data: upd });
+        preenchidas++;
+      }
+    }
+    if (preenchidas === 0) throw badRequest('Nenhum slot vazio ou nenhum time livre pra sortear');
+    res.json({ preenchidas, sobra: livres.length - cursor });
+  }),
+);
+
+campeonatosRouter.post(
   '/:id/rodadas/:n/sortear-resto',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);

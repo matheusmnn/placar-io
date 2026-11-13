@@ -186,6 +186,18 @@ export function RoundsMatches() {
   );
   const atual = rodadas[idx];
   const rodadaAtualNumero = atual?.partidas[0]?.rodada ?? idx + 1;
+  const temSlotVazioNaRodada = !!atual?.partidas.some((p) => p.status === 'AGENDADA' && (!p.mandante || !p.visitante));
+
+  async function sortearRestantes(rodada: number) {
+    if (!ativo) return;
+    setErro(null);
+    try {
+      await api.preencherSlotsVazios(ativo.id, rodada);
+      await carregar();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Falha ao sortear restantes');
+    }
+  }
 
   return (
     <OrganizerLayout>
@@ -265,27 +277,34 @@ export function RoundsMatches() {
               </button>
             </div>
 
-            {editavel && atual && (
+            {atual && (editavel || temSlotVazioNaRodada) && (
               <div className="flex items-center gap-2 mb-3 text-xs">
-                <Button size="sm" variant="outline" onClick={() => adicionarSlotVazio(rodadaAtualNumero)}>
-                  <Plus className="h-3.5 w-3.5" /> Adicionar partida
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setSorteio({ tipo: 'rodada', rodada: rodadaAtualNumero })}
-                >
-                  <Shuffle className="h-3.5 w-3.5" /> Sortear rodada
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={atual.partidas.length === 0}
-                  onClick={() => clonarVolta(rodadaAtualNumero)}
-                  title="Cria uma nova rodada ao final com os mesmos confrontos invertidos"
-                >
-                  Duplicar como volta
-                </Button>
+                {editavel && (
+                  <Button size="sm" variant="outline" onClick={() => adicionarSlotVazio(rodadaAtualNumero)}>
+                    <Plus className="h-3.5 w-3.5" /> Adicionar partida
+                  </Button>
+                )}
+                {editavel && (
+                  <Button size="sm" variant="ghost" onClick={() => setSorteio({ tipo: 'rodada', rodada: rodadaAtualNumero })}>
+                    <Shuffle className="h-3.5 w-3.5" /> Sortear rodada
+                  </Button>
+                )}
+                {temSlotVazioNaRodada && (
+                  <Button size="sm" variant="ghost" onClick={() => sortearRestantes(rodadaAtualNumero)}>
+                    <Shuffle className="h-3.5 w-3.5" /> Sortear restantes
+                  </Button>
+                )}
+                {editavel && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={atual.partidas.length === 0}
+                    onClick={() => clonarVolta(rodadaAtualNumero)}
+                    title="Cria uma nova rodada ao final com os mesmos confrontos invertidos"
+                  >
+                    Duplicar como volta
+                  </Button>
+                )}
               </div>
             )}
 
@@ -502,9 +521,9 @@ function SlotPicker({ partidaId, times, ocupados, lado, onDone }: {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="h-7 text-xs border-dashed">
+        <button className="h-7 px-2.5 text-xs rounded-md border border-dashed border-foreground/30 text-muted-foreground hover:bg-foreground/5 hover:text-foreground flex items-center gap-1">
           <Plus className="w-3 h-3" /> Escolher time
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-2">
         <p className="text-xs text-muted-foreground mb-2 px-1">Escolher {lado}</p>
