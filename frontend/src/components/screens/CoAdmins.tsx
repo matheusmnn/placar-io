@@ -68,13 +68,14 @@ export function CoAdmins() {
     }
   }, []);
 
+  const ativoId = ativo?.id;
   useEffect(() => {
-    if (!ativo) {
+    if (!ativoId) {
       navigate('/dashboard');
       return;
     }
-    carregar(ativo.id);
-  }, [ativo, carregar, navigate]);
+    carregar(ativoId);
+  }, [ativoId, carregar, navigate]);
 
   if (!ativo) return null;
 
