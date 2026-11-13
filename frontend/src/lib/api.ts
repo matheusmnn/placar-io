@@ -489,9 +489,9 @@ export const api = {
     avar2Email?: string | null; observadorVarEmail?: string | null;
   }) => request<unknown>(`/partidas/${partidaId}/arbitragem`, { method: 'PUT', body: body(data) }),
 
-  adicionarAuxiliar: (partidaId: number, email: string) =>
-    request<{ partidaId: number; usuarioId: number; email: string }>(
-      `/partidas/${partidaId}/auxiliares`, { method: 'POST', body: body({ email }) }),
+  adicionarAuxiliar: (partidaId: number, identificador: string) =>
+    request<{ partidaId: number; usuarioId: number; email: string; nome: string; username: string | null }>(
+      `/partidas/${partidaId}/auxiliares`, { method: 'POST', body: body({ identificador }) }),
   removerAuxiliar: (partidaId: number, usuarioId: number) =>
     request<void>(`/partidas/${partidaId}/auxiliares/${usuarioId}`, { method: 'DELETE' }),
 

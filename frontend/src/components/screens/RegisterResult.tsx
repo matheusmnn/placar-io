@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, ExternalLink, Loader2, Pencil, Plus, Trash2, Save, X, Radio } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Loader2, Pencil, Plus, Trash2, Save, X, Radio, FileText, UserPlus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -14,6 +14,7 @@ import {
 } from '../../lib/api';
 import { campeonatoAtivo, partidaAtiva } from '../../lib/session';
 import { PenaltisEditor } from '../PenaltisEditor';
+import { AuxiliaresModal } from '../AuxiliaresModal';
 
 /* ----------------------------- helpers ---------------------------------- */
 
@@ -100,6 +101,8 @@ export function RegisterResult() {
   const [comissaoMandante, setComissaoMandante] = useState<ComissaoTecnica[]>([]);
   const [comissaoVisitante, setComissaoVisitante] = useState<ComissaoTecnica[]>([]);
   const [arbitros, setArbitros] = useState<ArbitroCampeonato[]>([]);
+  const [showSumula, setShowSumula] = useState(false);
+  const [showModalAux, setShowModalAux] = useState(false);
 
   useEffect(() => {
     if (!partidaId) { navigate('/dashboard/rodadas'); return; }
@@ -189,143 +192,170 @@ export function RegisterResult() {
           </div>
         )}
 
-        {det.usaSumula && partida.status !== 'CONCLUIDA' && (
+        {!showSumula && (
+          <div className="grid gap-3 mb-4 sm:grid-cols-2">
+            {partida.status !== 'CONCLUIDA' && (
+              <button
+                onClick={() => navigate('/dashboard/ao-vivo')}
+                className="rounded-md border border-brand/40 bg-brand/10 hover:bg-brand/20 text-foreground px-4 py-3 flex items-center justify-between text-sm transition-colors"
+              >
+                <span className="flex items-center gap-2 font-semibold">
+                  <Radio className="w-4 h-4 text-brand" />
+                  {partida.status === 'EM_ANDAMENTO' ? 'Voltar pro modo ao vivo' : 'Modo ao vivo'}
+                </span>
+                <span className="text-xs text-muted-foreground">cronômetro e eventos</span>
+              </button>
+            )}
+            <div className="rounded-md border border-border bg-card px-4 py-3 flex items-center justify-between gap-2">
+              <button
+                onClick={() => setShowSumula(true)}
+                className="flex items-center gap-2 text-sm font-semibold flex-1 min-w-0"
+              >
+                <FileText className="w-4 h-4" />
+                Mexer na súmula
+                <span className="text-xs text-muted-foreground font-normal truncate">arbitragem, escalação, cronologia</span>
+              </button>
+              <button
+                onClick={() => setShowModalAux(true)}
+                title="Adicionar quem preenche a súmula"
+                className="w-8 h-8 rounded-md bg-muted hover:bg-foreground hover:text-background flex items-center justify-center text-sm shrink-0"
+              >
+                <UserPlus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showSumula && (
           <button
-            onClick={() => navigate('/dashboard/ao-vivo')}
-            className="w-full rounded-md border border-brand/40 bg-brand/10 hover:bg-brand/20 text-foreground px-4 py-3 mb-4 flex items-center justify-between text-sm transition-colors"
+            onClick={() => setShowSumula(false)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
           >
-            <span className="flex items-center gap-2 font-semibold">
-              <Radio className="w-4 h-4 text-brand" />
-              {partida.status === 'EM_ANDAMENTO' ? 'Voltar pro modo ao vivo' : 'Abrir modo ao vivo'}
-            </span>
-            <span className="text-xs text-muted-foreground">placar, cronômetro e eventos em tempo real</span>
+            <ChevronLeft className="w-4 h-4" /> Sair da súmula
           </button>
         )}
 
-        {!det.usaSumula && (
-          <SimpleScoreView
-            partida={partida}
-            salvando={salvando}
-            onSalvar={(data) => withBusy(async () => {
-              await api.fecharPlacar(partida.id, data);
-              navigate('/dashboard/rodadas');
-            })}
-            onPenaltisSaved={() => recarregar(partida.id)}
+        {showModalAux && (
+          <AuxiliaresModal
+            partidaId={partida.id}
+            auxiliaresAtuais={det.arbitragem?.auxiliares ?? []}
+            onClose={() => setShowModalAux(false)}
+            onChanged={() => recarregar(partida.id)}
           />
         )}
 
-        {det.usaSumula && <>
         <HeaderSumula partida={partida} salvar={salvarEDepoisRecarregar} duracao1T={det.duracaoPrimeiroTempo} duracao2T={det.duracaoSegundoTempo} />
 
+        {!showSumula && <>
+          <PlacarSection
+            partida={partida}
+            cronologia={det.cronologia}
+            salvando={salvando}
+            onPenaltisSaved={() => recarregar(partida.id)}
+            salvar1T={async ({ m, v }) => {
+              await withBusy(() => api.salvarCronologia(partida.id, {
+                placar1TMandante: m,
+                placar1TVisitante: v,
+              }));
+              await recarregar(partida.id);
+            }}
+            onSalvarFinal={(data) =>
+              withBusy(async () => {
+                await api.fecharPlacar(partida.id, data);
+                navigate('/dashboard/rodadas');
+              })
+            }
+          />
 
+          <GolsSection
+            partidaId={partida.id}
+            mandante={mandante}
+            visitante={visitante}
+            jogMandante={jogMandante}
+            jogVisitante={jogVisitante}
+            gols={det.gols}
+            salvar={salvarEDepoisRecarregar}
+          />
 
-        {secaoLigada('arbitragem', det.sumulaConfig) && <ArbitragemSection
-          partidaId={partida.id}
-          partida={partida}
-          arbitragem={det.arbitragem}
-          arbitros={arbitros}
-          onSave={() => recarregar(partida.id)}
-          salvando={salvando}
-          setSalvando={setSalvando}
-          setErro={setErro}
-          salvar={salvarEDepoisRecarregar}
-        />}
+          <CartoesSection
+            partidaId={partida.id}
+            mandante={mandante}
+            visitante={visitante}
+            jogMandante={jogMandante}
+            jogVisitante={jogVisitante}
+            cartoes={det.cartoes}
+            salvar={salvarEDepoisRecarregar}
+          />
 
-        {secaoLigada('cronologia', det.sumulaConfig) && <CronologiaSection
-          partidaId={partida.id}
-          cronologia={det.cronologia}
-          dataPartida={partida.dataPartida}
-          cfg={det.sumulaConfig}
-          salvar={salvarEDepoisRecarregar}
-        />}
+          <SubstituicoesSection
+            partidaId={partida.id}
+            mandante={mandante}
+            visitante={visitante}
+            jogMandante={jogMandante}
+            jogVisitante={jogVisitante}
+            substituicoes={det.substituicoes ?? []}
+            salvar={salvarEDepoisRecarregar}
+          />
 
-        {secaoLigada('escalacao', det.sumulaConfig) && <EscalacaoSection
-          partidaId={partida.id}
-          mandante={mandante}
-          visitante={visitante}
-          jogMandante={jogMandante}
-          jogVisitante={jogVisitante}
-          escalacaoAtual={det.escalacao ?? []}
-          cfg={det.sumulaConfig}
-          salvar={salvarEDepoisRecarregar}
-        />}
+          <StatsSection
+            partidaId={partida.id}
+            mandanteId={mandante.id}
+            visitanteId={visitante.id}
+            mandanteNome={mandante.nome}
+            visitanteNome={visitante.nome}
+            stats={det.stats ?? []}
+            salvar={salvarEDepoisRecarregar}
+          />
+        </>}
 
-        {secaoLigada('escalacao', det.sumulaConfig) && subLigada(det.sumulaConfig, 'escalacao', 'comissao') && <ComissaoBlock mandanteNome={mandante.nome} visitanteNome={visitante.nome}
-          mandante={comissaoMandante} visitante={comissaoVisitante} />}
+        {showSumula && <>
+          {secaoLigada('arbitragem', det.sumulaConfig) && <ArbitragemSection
+            partidaId={partida.id}
+            partida={partida}
+            arbitragem={det.arbitragem}
+            arbitros={arbitros}
+            onSave={() => recarregar(partida.id)}
+            salvando={salvando}
+            setSalvando={setSalvando}
+            setErro={setErro}
+            salvar={salvarEDepoisRecarregar}
+          />}
 
-        {secaoLigada('gols', det.sumulaConfig) && <GolsSection
-          partidaId={partida.id}
-          mandante={mandante}
-          visitante={visitante}
-          jogMandante={jogMandante}
-          jogVisitante={jogVisitante}
-          gols={det.gols}
-          salvar={salvarEDepoisRecarregar}
-        />}
+          {secaoLigada('cronologia', det.sumulaConfig) && <CronologiaSection
+            partidaId={partida.id}
+            cronologia={det.cronologia}
+            dataPartida={partida.dataPartida}
+            cfg={det.sumulaConfig}
+            salvar={salvarEDepoisRecarregar}
+          />}
 
-        {secaoLigada('cartoes', det.sumulaConfig) && <CartoesSection
-          partidaId={partida.id}
-          mandante={mandante}
-          visitante={visitante}
-          jogMandante={jogMandante}
-          jogVisitante={jogVisitante}
-          cartoes={det.cartoes}
-          salvar={salvarEDepoisRecarregar}
-        />}
+          {secaoLigada('escalacao', det.sumulaConfig) && <EscalacaoSection
+            partidaId={partida.id}
+            mandante={mandante}
+            visitante={visitante}
+            jogMandante={jogMandante}
+            jogVisitante={jogVisitante}
+            escalacaoAtual={det.escalacao ?? []}
+            cfg={det.sumulaConfig}
+            salvar={salvarEDepoisRecarregar}
+          />}
 
-        {secaoLigada('escalacao', det.sumulaConfig) && subLigada(det.sumulaConfig, 'escalacao', 'substituicoes') && <SubstituicoesSection
-          partidaId={partida.id}
-          mandante={mandante}
-          visitante={visitante}
-          jogMandante={jogMandante}
-          jogVisitante={jogVisitante}
-          substituicoes={det.substituicoes ?? []}
-          salvar={salvarEDepoisRecarregar}
-        />}
+          {secaoLigada('escalacao', det.sumulaConfig) && subLigada(det.sumulaConfig, 'escalacao', 'comissao') && <ComissaoBlock mandanteNome={mandante.nome} visitanteNome={visitante.nome}
+            mandante={comissaoMandante} visitante={comissaoVisitante} />}
 
-        <StatsSection
-          partidaId={partida.id}
-          mandanteId={mandante.id}
-          visitanteId={visitante.id}
-          mandanteNome={mandante.nome}
-          visitanteNome={visitante.nome}
-          stats={det.stats ?? []}
-          salvar={salvarEDepoisRecarregar}
-        />
+          {secaoLigada('observacoes', det.sumulaConfig) && <ObservacoesSection
+            partidaId={partida.id}
+            obs={det.observacoes}
+            cfg={det.sumulaConfig}
+            salvar={salvarEDepoisRecarregar}
+          />}
 
-        {secaoLigada('observacoes', det.sumulaConfig) && <ObservacoesSection
-          partidaId={partida.id}
-          obs={det.observacoes}
-          cfg={det.sumulaConfig}
-          salvar={salvarEDepoisRecarregar}
-        />}
-
-        {det.sumulaConfig.camposCustom.length > 0 && <CamposCustomSection
-          partidaId={partida.id}
-          campos={det.sumulaConfig.camposCustom}
-          valores={partida.camposCustom}
-          salvar={salvarEDepoisRecarregar}
-        />}
-
-        {secaoLigada('placar', det.sumulaConfig) && <PlacarSection
-          partida={partida}
-          cronologia={det.cronologia}
-          salvando={salvando}
-          onPenaltisSaved={() => recarregar(partida.id)}
-          salvar1T={async ({ m, v }) => {
-            await withBusy(() => api.salvarCronologia(partida.id, {
-              placar1TMandante: m,
-              placar1TVisitante: v,
-            }));
-            await recarregar(partida.id);
-          }}
-          onSalvarFinal={(data) =>
-            withBusy(async () => {
-              await api.fecharPlacar(partida.id, data);
-              navigate('/dashboard/rodadas');
-            })
-          }
-        />}
+          {det.sumulaConfig.camposCustom.length > 0 && <CamposCustomSection
+            partidaId={partida.id}
+            campos={det.sumulaConfig.camposCustom}
+            valores={partida.camposCustom}
+            salvar={salvarEDepoisRecarregar}
+          />}
         </>}
       </div>
     </OrganizerLayout>
@@ -718,7 +748,7 @@ function ArbitragemSection({
           )}
         </div>
         <div className="flex gap-2">
-          <Input placeholder="email do auxiliar" value={auxEmail}
+          <Input placeholder="email ou @username" value={auxEmail}
             onChange={(e) => setAuxEmail(e.target.value)} className="h-8 text-sm max-w-xs" />
           <Button size="sm" onClick={adicionarAux} variant="outline">Adicionar</Button>
         </div>
@@ -1642,131 +1672,6 @@ function CamposCustomSection({
         ))}
       </div>
     </CBFSection>
-  );
-}
-
-/* ---- Tela simples (campeonato sem súmula) ---- */
-function SimpleScoreView({
-  partida, salvando, onSalvar, onPenaltisSaved,
-}: {
-  partida: Partida; salvando: boolean;
-  onSalvar: (data: {
-    golsMandante: number; golsVisitante: number;
-    prorrogacao?: boolean;
-    golsMandanteProrr?: number | null; golsVisitanteProrr?: number | null;
-    penaltisMandante?: number | null; penaltisVisitante?: number | null;
-  }) => Promise<unknown>;
-  onPenaltisSaved: () => void | Promise<void>;
-}) {
-  const [gm, setGm] = useState(partida.golsMandante ?? 0);
-  const [gv, setGv] = useState(partida.golsVisitante ?? 0);
-  const [temProrr, setTemProrr] = useState(partida.prorrogacao);
-  const [prorrGm, setProrrGm] = useState(partida.golsMandanteProrr != null ? String(partida.golsMandanteProrr) : '');
-  const [prorrGv, setProrrGv] = useState(partida.golsVisitanteProrr != null ? String(partida.golsVisitanteProrr) : '');
-  const [penM, setPenM] = useState(partida.penaltisMandante != null ? String(partida.penaltisMandante) : '');
-  const [penV, setPenV] = useState(partida.penaltisVisitante != null ? String(partida.penaltisVisitante) : '');
-  const [temPen, setTemPen] = useState(
-    partida.penaltisMandante != null || partida.penaltisVisitante != null || (partida.penaltisSerie?.length ?? 0) > 0,
-  );
-  const [modoPen, setModoPen] = useState<'resultado' | 'sequencia'>(
-    partida.penaltisSerie && partida.penaltisSerie.length > 0 ? 'sequencia' : 'resultado',
-  );
-  const mandante = partida.mandante;
-  const visitante = partida.visitante;
-  if (!mandante || !visitante) return null;
-
-  async function salvar() {
-    const empatado = gm === gv && !temPen;
-    if (empatado && !window.confirm(
-      `A partida está empatada (${gm} × ${gv}) e não há pênaltis. Em confrontos de ida e volta ou mata-mata, o empate pode não resolver o confronto. Encerrar mesmo assim?`
-    )) return;
-    await onSalvar({
-      golsMandante: gm,
-      golsVisitante: gv,
-      prorrogacao: temProrr,
-      golsMandanteProrr: temProrr && prorrGm !== '' ? Number(prorrGm) : null,
-      golsVisitanteProrr: temProrr && prorrGv !== '' ? Number(prorrGv) : null,
-      penaltisMandante: temPen && penM !== '' ? Number(penM) : null,
-      penaltisVisitante: temPen && penV !== '' ? Number(penV) : null,
-    });
-  }
-
-  return (
-    <div className="rounded-lg border border-border bg-card p-6 space-y-6">
-      <h2 className="text-lg font-semibold">Resultado da partida</h2>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-        <div className="text-center space-y-2">
-          <p className="text-sm font-semibold truncate">{mandante.nome}</p>
-          <PlacarContador label="" valor={gm} onChange={setGm} />
-        </div>
-        <span className="text-muted-foreground text-xl">×</span>
-        <div className="text-center space-y-2">
-          <p className="text-sm font-semibold truncate">{visitante.nome}</p>
-          <PlacarContador label="" valor={gv} onChange={setGv} />
-        </div>
-      </div>
-
-      <details className="pt-4 border-t border-border">
-        <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Prorrogação</summary>
-        <div className="mt-3 space-y-2">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={temProrr} onChange={(e) => setTemProrr(e.target.checked)} className="h-4 w-4 accent-primary" />
-            Houve prorrogação
-          </label>
-          {temProrr && (
-            <div className="grid grid-cols-2 gap-2 max-w-sm">
-              <Input type="number" min={0} value={prorrGm} onChange={(e) => setProrrGm(e.target.value)} placeholder="Prorrog. mandante" className="h-9 text-sm" />
-              <Input type="number" min={0} value={prorrGv} onChange={(e) => setProrrGv(e.target.value)} placeholder="Prorrog. visitante" className="h-9 text-sm" />
-            </div>
-          )}
-        </div>
-      </details>
-
-      <details className="pt-4 border-t border-border" open={temPen}>
-        <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Pênaltis</summary>
-        <div className="mt-3 space-y-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={temPen} onChange={(e) => setTemPen(e.target.checked)} className="h-4 w-4 accent-primary" />
-            Houve disputa de pênaltis
-          </label>
-          {temPen && (
-            <>
-              <div className="flex gap-1 text-xs">
-                <button type="button" onClick={() => setModoPen('resultado')} className={`px-2 py-0.5 rounded ${modoPen === 'resultado' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>Só resultado</button>
-                <button type="button" onClick={() => setModoPen('sequencia')} className={`px-2 py-0.5 rounded ${modoPen === 'sequencia' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>Cada cobrança</button>
-              </div>
-              {modoPen === 'resultado' ? (
-                <div className="grid grid-cols-2 gap-2 max-w-sm">
-                  <Input type="number" min={0} value={penM} onChange={(e) => setPenM(e.target.value)} placeholder="Pên. mandante" className="h-9 text-sm" />
-                  <Input type="number" min={0} value={penV} onChange={(e) => setPenV(e.target.value)} placeholder="Pên. visitante" className="h-9 text-sm" />
-                </div>
-              ) : (
-                <PenaltisEditor
-                  partidaId={partida.id}
-                  serie={partida.penaltisSerie ?? null}
-                  mandante={mandante}
-                  visitante={visitante}
-                  onSaved={async () => {
-                    await onPenaltisSaved();
-                    const m = (partida.penaltisSerie ?? []).filter((s) => s.time === 'M' && s.converteu).length;
-                    const v = (partida.penaltisSerie ?? []).filter((s) => s.time === 'V' && s.converteu).length;
-                    setPenM(String(m));
-                    setPenV(String(v));
-                  }}
-                />
-              )}
-            </>
-          )}
-        </div>
-      </details>
-
-      <div className="flex justify-end">
-        <Button onClick={salvar} disabled={salvando} className="gap-1">
-          {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Salvar resultado
-        </Button>
-      </div>
-    </div>
   );
 }
 

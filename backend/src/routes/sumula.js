@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authRequired } from '../middleware/auth.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
-import { assertDonoDoCampeonato, assertPodeEditarSumula, carregarPartidaComAuth } from '../services/permissoes.js';
+import { assertDonoDoCampeonato, assertPermissaoCampeonato, assertPodeEditarSumula, carregarPartidaComAuth } from '../services/permissoes.js';
 import { fecharPlacar } from '../services/partida.js';
 
 export const sumulaRouter = Router();
@@ -480,24 +480,38 @@ sumulaRouter.put(
   }),
 );
 
-// -------- Auxiliares (co-editores da súmula, por email) -----------------
+// -------- Auxiliares (co-editores da súmula, por email ou username) -----
 
-const auxSchema = z.object({ email: z.string().email() });
+const auxSchema = z.object({
+  identificador: z.string().min(1).max(200),
+});
+
+async function usuarioPorIdentificador(ident) {
+  const lower = ident.trim().toLowerCase();
+  if (lower.includes('@')) {
+    const u = await prisma.usuario.findFirst({ where: { email: { equals: lower, mode: 'insensitive' } } });
+    if (!u) throw badRequest('Usuário não encontrado com esse email');
+    return u;
+  }
+  const u = await prisma.usuario.findFirst({ where: { username: { equals: lower, mode: 'insensitive' } } });
+  if (!u) throw badRequest('Usuário não encontrado com esse username');
+  return u;
+}
 
 sumulaRouter.post(
   '/partidas/:id/auxiliares',
   asyncHandler(async (req, res) => {
     const partidaId = Number(req.params.id);
     const p = await carregarPartidaComAuth(partidaId);
-    assertDonoDoCampeonato(req.userId, p);
-    const { email } = auxSchema.parse(req.body);
-    const u = await usuarioPorEmail(email);
+    await assertPermissaoCampeonato(req.userId, p.campeonatoId, 'sumula');
+    const { identificador } = auxSchema.parse(req.body);
+    const u = await usuarioPorIdentificador(identificador);
     await prisma.partidaAuxiliar.upsert({
       where: { partidaId_usuarioId: { partidaId, usuarioId: u.id } },
       create: { partidaId, usuarioId: u.id },
       update: {},
     });
-    res.status(201).json({ partidaId, usuarioId: u.id, email: u.email });
+    res.status(201).json({ partidaId, usuarioId: u.id, email: u.email, nome: u.nome, username: u.username });
   }),
 );
 
@@ -507,7 +521,7 @@ sumulaRouter.delete(
     const partidaId = Number(req.params.id);
     const usuarioId = Number(req.params.usuarioId);
     const p = await carregarPartidaComAuth(partidaId);
-    assertDonoDoCampeonato(req.userId, p);
+    await assertPermissaoCampeonato(req.userId, p.campeonatoId, 'sumula');
     await prisma.partidaAuxiliar.delete({
       where: { partidaId_usuarioId: { partidaId, usuarioId } },
     });
