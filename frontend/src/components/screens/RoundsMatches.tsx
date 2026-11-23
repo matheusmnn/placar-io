@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ExternalLink, Loader2, MoreHorizontal, Plus, Shuffle, Trash2 } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Plus, Shuffle, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
@@ -756,8 +756,8 @@ function MenuPartida({ partida, times, timesOcupados, onRemover, onRecarregar }:
       }}
     >
       <PopoverTrigger asChild>
-        <button className="h-8 w-8 rounded-sm text-muted-foreground hover:bg-foreground/5 hover:text-foreground flex items-center justify-center" title="Editar partida">
-          <MoreHorizontal className="h-4 w-4" />
+        <button className="h-8 px-2 rounded-sm text-xs text-muted-foreground hover:bg-foreground/5 hover:text-foreground flex items-center gap-1.5" title="Editar partida">
+          <Pencil className="h-3.5 w-3.5" /> Editar
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-3 space-y-3">
