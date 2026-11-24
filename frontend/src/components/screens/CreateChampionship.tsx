@@ -2,8 +2,8 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ArrowDown, ArrowUp, Loader2, Plus, X } from 'lucide-react';
 import { OrganizerLayout } from '../OrganizerLayout';
-import { TeamShield } from '../TeamShield';
-import { api, ApiError, Campeonato, CriterioDesempate, FaixaTabela, Formato, KoDesempate, PlayoffConfig, Time } from '../../lib/api';
+import { api, ApiError, Campeonato, CriterioDesempate, FaixaTabela, Formato, KoDesempate, PlayoffConfig } from '../../lib/api';
+import { campeonatoAtivo } from '../../lib/session';
 
 const CRITERIOS_INFO: Record<CriterioDesempate, string> = {
   saldo: 'Saldo de gols',
@@ -96,8 +96,6 @@ export function CreateChampionship() {
   const [vinculadoId, setVinculadoId] = useState<string>('nenhum');
   const [faixas, setFaixas] = useState<FaixaTabela[]>([]);
   const [outros, setOutros] = useState<Campeonato[]>([]);
-  const [meusTimes, setMeusTimes] = useState<Time[]>([]);
-  const [timesSelecionados, setTimesSelecionados] = useState<Set<number>>(new Set());
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Estrutura congela quando o campeonato já começou ou tem partidas geradas:
@@ -106,7 +104,6 @@ export function CreateChampionship() {
 
   useEffect(() => {
     api.listarCampeonatos().then((r) => setOutros(r.campeonatos)).catch(() => setOutros([]));
-    api.listarMeusTimes().then(setMeusTimes).catch(() => setMeusTimes([]));
     if (editandoId !== null) {
       api.obterCampeonato(editandoId).then((c) => {
         setNome(c.nome);
@@ -134,12 +131,6 @@ export function CreateChampionship() {
       }).catch(() => setErro('Não foi possível carregar o campeonato'));
     }
   }, [editandoId]);
-
-  function toggleTime(id: number) {
-    const next = new Set(timesSelecionados);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setTimesSelecionados(next);
-  }
 
   const opcao = FORMATOS.find((f) => f.value === formato)!;
 
@@ -200,13 +191,12 @@ export function CreateChampionship() {
       };
       if (editandoId !== null) {
         await api.atualizarCampeonato(editandoId, payload);
+        navigate('/dashboard');
       } else {
         const campCriado = await api.criarCampeonato(payload);
-        for (const timeId of timesSelecionados) {
-          try { await api.inscreverTime(campCriado.id, { timeId }); } catch { /* segue — usuário pode inscrever depois */ }
-        }
+        campeonatoAtivo.set({ id: campCriado.id, nome: campCriado.nome });
+        navigate('/dashboard/times');
       }
-      navigate('/dashboard');
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível salvar');
     } finally { setLoading(false); }
@@ -215,7 +205,6 @@ export function CreateChampionship() {
   // Numeração romana contígua: só conta as seções que realmente renderizam.
   const roman = (() => { let i = 0; const R = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']; return () => `${R[i++]}.`; })();
   const subtitulo = descricao.trim() || `${opcao.label} — ${resumoFormato()}.`;
-  const clubes = editando ? '—' : String(timesSelecionados.size);
 
   return (
     <OrganizerLayout>
@@ -423,38 +412,6 @@ export function CreateChampionship() {
                 <button type="button" onClick={addFaixa} className="font-scoreboard" style={{ all: 'unset', cursor: 'pointer', marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, letterSpacing: '0.08em', padding: '6px 12px', border: `1px solid ${C.ink}`, textTransform: 'uppercase' }}><Plus className="h-3.5 w-3.5" /> Adicionar faixa</button>
               </section>
 
-              {/* Times */}
-              {!editando && (
-                <section>
-                  <SectionHead n={roman()} title="Times que vão disputar" tag={meusTimes.length ? `${timesSelecionados.size} / ${meusTimes.length}` : undefined} />
-                  {meusTimes.length === 0 ? (
-                    <p style={{ fontSize: 13, color: C.muted }}>Nenhum time cadastrado ainda. Dá pra criar em “Times” e inscrever depois.</p>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', gap: 14, marginBottom: 10 }}>
-                        <button type="button" onClick={() => setTimesSelecionados(new Set(meusTimes.map((t) => t.id)))} className="font-scoreboard" style={{ all: 'unset', cursor: 'pointer', fontSize: 10, letterSpacing: '0.12em', color: C.blue, textTransform: 'uppercase' }}>Selecionar todos</button>
-                        <button type="button" onClick={() => setTimesSelecionados(new Set())} className="font-scoreboard" style={{ all: 'unset', cursor: 'pointer', fontSize: 10, letterSpacing: '0.12em', color: C.muted, textTransform: 'uppercase' }}>Limpar</button>
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-                        {meusTimes.map((t) => {
-                          const sel = timesSelecionados.has(t.id);
-                          return (
-                            <button key={t.id} type="button" aria-pressed={sel} onClick={() => toggleTime(t.id)}
-                              style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: `1px solid ${sel ? C.blue : C.line2}`, background: sel ? C.blueSoft : 'transparent' }}>
-                              <TeamShield nome={t.nome} cor={t.cor} abreviacao={t.abreviacao} escudoUrl={t.escudoUrl} size="sm" />
-                              <span style={{ minWidth: 0, flex: 1 }}>
-                                <span className="font-display" style={{ fontSize: 14, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.nome}</span>
-                                {t.cidade && <span style={{ fontSize: 11, color: C.muted }}>{t.cidade}</span>}
-                              </span>
-                              <span style={{ width: 14, height: 14, borderRadius: '50%', border: `1.5px solid ${sel ? C.blue : C.ink}`, background: sel ? C.blue : 'transparent', boxShadow: sel ? `inset 0 0 0 2px ${C.blueSoft}` : 'none', flexShrink: 0 }} />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-                </section>
-              )}
             </div>
 
             {/* PREVIEW rail */}
@@ -464,7 +421,6 @@ export function CreateChampionship() {
                 <div className="font-display" style={{ fontSize: 24, fontWeight: 600, marginTop: 4, lineHeight: 1.05 }}>{opcao.label}</div>
                 <div className="font-scoreboard" style={{ fontSize: 11, opacity: 0.8, marginTop: 4 }}>{resumoFormato()}</div>
                 <div className="grid grid-cols-2 gap-2.5" style={{ marginTop: 14 }}>
-                  <PrevStat label="Clubes" value={clubes} />
                   <PrevStat label="Pts vitória" value={formato === 'MATA_MATA' ? '—' : String(pontosVitoria)} />
                   <PrevStat label="1º tempo" value={`${duracao1T}′`} />
                   <PrevStat label="2º tempo" value={`${duracao2T}′`} />
@@ -472,14 +428,14 @@ export function CreateChampionship() {
               </div>
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.line2}` }}>
                 <div className="font-scoreboard" style={{ fontSize: 10, letterSpacing: '0.14em', color: C.muted, textTransform: 'uppercase' }}>Status</div>
-                <div className="font-display" style={{ fontSize: 15, marginTop: 2, color: C.ink }}>{nome.trim() ? 'Pronto pra selecionar os times →' : 'Dê um nome pra começar.'}</div>
+                <div className="font-display" style={{ fontSize: 15, marginTop: 2, color: C.ink }}>{nome.trim() ? 'Pronto pra abrir → cadastre os times no próximo passo' : 'Dê um nome pra começar.'}</div>
               </div>
             </aside>
           </div>
 
           {/* Footer */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0 40px', borderTop: `4px double ${C.ink}`, marginTop: 20 }}>
-            <div className="font-scoreboard" style={{ fontSize: 10, letterSpacing: '0.18em', color: C.muted, textTransform: 'uppercase' }}>{editando ? 'Salve pra aplicar as mudanças' : 'Rascunho · você inscreve mais times depois'}</div>
+            <div className="font-scoreboard" style={{ fontSize: 10, letterSpacing: '0.18em', color: C.muted, textTransform: 'uppercase' }}>{editando ? 'Salve pra aplicar as mudanças' : 'Rascunho · os times entram no próximo passo'}</div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="button" onClick={() => navigate('/dashboard')} disabled={loading} style={{ all: 'unset', cursor: loading ? 'default' : 'pointer', padding: '10px 18px', fontSize: 13, color: C.ink, opacity: loading ? 0.5 : 1 }}>Cancelar</button>
               <button type="button" onClick={salvar} disabled={loading} className="font-scoreboard" style={{ all: 'unset', cursor: loading ? 'default' : 'pointer', padding: '10px 22px', background: C.blue, color: C.sheet, fontSize: 12, letterSpacing: '0.06em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: loading ? 0.6 : 1 }}>
