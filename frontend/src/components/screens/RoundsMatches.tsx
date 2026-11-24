@@ -630,9 +630,14 @@ function BracketMatch({ partida, times, ocupados, timesOcupados, onAbrir, onReca
           pên {partida.penaltisMandante}–{partida.penaltisVisitante}
         </p>
       )}
-      {podeMexer && (
-        <div className="border-t border-border flex justify-end px-1 py-0.5">
-          <MenuPartida partida={partida} times={times} timesOcupados={timesOcupados} onRemover={() => {}} onRecarregar={onRecarregar} />
+      {(clicavel || podeMexer) && (
+        <div className="border-t border-border flex items-center justify-between px-1 py-0.5">
+          {clicavel ? (
+            <button onClick={onAbrir} title="Preencher partida" aria-label="Preencher partida" className="p-1 text-muted-foreground hover:text-brand">
+              <Play className="h-3.5 w-3.5" />
+            </button>
+          ) : <span />}
+          {podeMexer && <MenuPartida partida={partida} times={times} timesOcupados={timesOcupados} onRemover={() => {}} onRecarregar={onRecarregar} />}
         </div>
       )}
     </div>
