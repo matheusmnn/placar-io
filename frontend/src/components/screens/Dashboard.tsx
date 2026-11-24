@@ -58,6 +58,11 @@ export function Dashboard() {
     navigate('/dashboard/rodadas');
   }
 
+  function abrirMontagem(c: Campeonato) {
+    campeonatoAtivo.set({ id: c.id, nome: c.nome });
+    navigate('/dashboard/times');
+  }
+
   async function excluir(c: Campeonato, e: React.MouseEvent) {
     e.stopPropagation();
     if (!confirm(`Excluir "${c.nome}"?`)) return;
@@ -166,7 +171,7 @@ export function Dashboard() {
                     <SecHead n="II" titulo="Rascunhos" />
                     {rascunhos.map((c) => (
                       <div key={c.id} className="group grid grid-cols-[1fr_auto] items-baseline gap-4 py-3 border-b border-border">
-                        <button onClick={() => navigate(`/dashboard/editar/${c.id}`)} className="min-w-0 text-left">
+                        <button onClick={() => abrirMontagem(c)} className="min-w-0 text-left">
                           <div className="font-display text-lg leading-tight truncate">{c.nome}</div>
                           <div className="font-scoreboard text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground mt-0.5">{c.qtdTimes} times · {formatoLabel[c.formato]}</div>
                         </button>
