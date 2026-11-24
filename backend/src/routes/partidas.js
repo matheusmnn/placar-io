@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { authRequired } from '../middleware/auth.js';
 import { asyncHandler, badRequest, notFound } from '../lib/http.js';
 import { detalhe, registrarResultado } from '../services/partida.js';
+import { assertCampeonatoIniciado } from '../services/permissoes.js';
 
 export const partidasRouter = Router();
 partidasRouter.use(authRequired);
@@ -11,7 +12,7 @@ partidasRouter.use(authRequired);
 async function assertOwnedPartida(usuarioId, partidaId) {
   const p = await prisma.partida.findUnique({
     where: { id: partidaId },
-    include: { campeonato: { select: { usuarioId: true } } },
+    include: { campeonato: { select: { usuarioId: true, status: true } } },
   });
   if (!p || p.campeonato.usuarioId !== usuarioId) throw notFound('Partida não encontrada');
   return p;
@@ -68,7 +69,8 @@ partidasRouter.put(
   '/:id/resultado',
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    await assertOwnedPartida(req.userId, id);
+    const p = await assertOwnedPartida(req.userId, id);
+    assertCampeonatoIniciado(p);
     const data = resultadoSchema.parse(req.body);
     res.json(await registrarResultado(id, data));
   }),

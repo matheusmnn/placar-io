@@ -7,6 +7,7 @@ import {
   ESCOPOS_COADM,
   podeSerConvidado,
   podeEditarPermissoesDe,
+  assertCampeonatoIniciado,
 } from './permissoes.js';
 
 const DONO = { id: 1, isSuperAdmin: false };
@@ -85,4 +86,14 @@ test('podeEditarPermissoesDe bloqueia auto-edição', () => {
 
 test('podeEditarPermissoesDe permite editar outros', () => {
   assert.equal(podeEditarPermissoesDe({ id: 2 }, 3), true);
+});
+
+test('assertCampeonatoIniciado: rascunho é recusado', () => {
+  assert.throws(() => assertCampeonatoIniciado({ campeonato: { status: 'NAO_INICIADO' } }), /Inicie o campeonato/);
+});
+test('assertCampeonatoIniciado: em andamento passa', () => {
+  assert.doesNotThrow(() => assertCampeonatoIniciado({ campeonato: { status: 'EM_ANDAMENTO' } }));
+});
+test('assertCampeonatoIniciado: encerrado passa', () => {
+  assert.doesNotThrow(() => assertCampeonatoIniciado({ campeonato: { status: 'ENCERRADO' } }));
 });

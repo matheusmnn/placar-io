@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { forbidden, notFound } from '../lib/http.js';
+import { badRequest, forbidden, notFound } from '../lib/http.js';
 
 export const ESCOPOS_COADM = ['gerenciar', 'elenco', 'calendario', 'sumula', 'coAdms', 'excluir'];
 
@@ -74,7 +74,7 @@ export async function carregarPartidaComAuth(partidaId) {
   const p = await prisma.partida.findUnique({
     where: { id: partidaId },
     include: {
-      campeonato: { select: { usuarioId: true } },
+      campeonato: { select: { usuarioId: true, status: true } },
       auxiliares: { select: { usuarioId: true } },
     },
   });
@@ -82,13 +82,21 @@ export async function carregarPartidaComAuth(partidaId) {
   return p;
 }
 
+// Registrar jogo exige o campeonato iniciado (trava de estado, não de permissão).
+export function assertCampeonatoIniciado(partida) {
+  if (partida.campeonato.status === 'NAO_INICIADO') {
+    throw badRequest('Inicie o campeonato antes de registrar os jogos');
+  }
+}
+
 // Dono do campeonato pode tudo. Juiz e auxiliares podem editar a súmula daquela partida.
 export function assertPodeEditarSumula(usuarioId, partida) {
   if (!usuarioId) throw forbidden('Não autenticado');
-  if (partida.campeonato.usuarioId === usuarioId) return;
-  if (partida.juizId === usuarioId) return;
-  if (partida.auxiliares.some((a) => a.usuarioId === usuarioId)) return;
-  throw forbidden('Você não tem permissão pra editar essa súmula');
+  const dono = partida.campeonato.usuarioId === usuarioId;
+  const juiz = partida.juizId === usuarioId;
+  const aux = partida.auxiliares.some((a) => a.usuarioId === usuarioId);
+  if (!dono && !juiz && !aux) throw forbidden('Você não tem permissão pra editar essa súmula');
+  assertCampeonatoIniciado(partida);
 }
 
 // Só o dono do campeonato pode atribuir árbitros (juiz e auxiliares).
