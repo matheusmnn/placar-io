@@ -389,6 +389,8 @@ export const api = {
 
   listarCampeonatos: () => request<CampeonatosResponse>('/campeonatos'),
   obterCampeonato: (id: number) => request<Campeonato>(`/campeonatos/${id}`),
+  iniciarCampeonato: (id: number) =>
+    request<Campeonato>(`/campeonatos/${id}/iniciar`, { method: 'POST' }),
   criarCampeonato: (data: Partial<Campeonato>) =>
     request<Campeonato>('/campeonatos', { method: 'POST', body: body(data) }),
   atualizarCampeonato: (id: number, data: Partial<Campeonato>) =>
