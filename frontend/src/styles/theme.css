@@ -3,41 +3,41 @@
 :root {
   --font-size: 16px;
 
-  /* Jornal Esportivo (1b). Paper frio + tinta quase-preta, azul elétrico como
-     o único acento. Página = #eaeae2, folha/card = #f4f4ec. */
-  --background: #eaeae2;
+  /* Identidade 1b em cinza neutro frio. Página #ececed, folha/card #f8f8f9,
+     tinta #111, azul elétrico #2a4bff como único acento. */
+  --background: #ececed;
   --foreground: #111111;
 
-  --card: #f4f4ec;
+  --card: #f8f8f9;
   --card-foreground: #111111;
-  --popover: #f4f4ec;
+  --popover: #f8f8f9;
   --popover-foreground: #111111;
 
   /* Primary = tinta: botões chapados, chrome, texto importante. */
   --primary: #111111;
-  --primary-foreground: #f4f4ec;
+  --primary-foreground: #f8f8f9;
 
-  --secondary: #e2e2da;
+  --secondary: #e4e4e7;
   --secondary-foreground: #111111;
 
   /* Brand = azul elétrico, o acento único (CTA, item ativo, líder, destaque). */
   --brand: #2a4bff;
-  --brand-foreground: #f4f4ec;
+  --brand-foreground: #f8f8f9;
   --brand-soft: #e6ebff;
 
-  --muted: #e2e2da;
-  --muted-foreground: #6d6d66;
+  --muted: #e4e4e7;
+  --muted-foreground: #6b6b73;
 
   --accent: #e6ebff;
   --accent-foreground: #111111;
 
   --destructive: #b91c1c;
-  --destructive-foreground: #f4f4ec;
+  --destructive-foreground: #f8f8f9;
 
-  --border: rgba(17, 17, 17, 0.14);
-  --input: rgba(17, 17, 17, 0.2);
-  --input-background: #f4f4ec;
-  --switch-background: #c7bfae;
+  --border: rgba(17, 17, 17, 0.12);
+  --input: rgba(17, 17, 17, 0.18);
+  --input-background: #f8f8f9;
+  --switch-background: #cfcfd4;
 
   --ring: rgba(42, 75, 255, 0.5);
   --radius: 0rem;
@@ -54,7 +54,7 @@
   --chart-5: #6d6d66;
 
   /* Sidebar/chrome editorial: folha clara, azul só no item ativo. */
-  --sidebar: #f4f4ec;
+  --sidebar: #f8f8f9;
   --sidebar-foreground: #111111;
   --sidebar-primary: #2a4bff;
   --sidebar-primary-foreground: #f4f4ec;
@@ -67,28 +67,28 @@
 /* Dark ficou quebrado sem desenho — travado em claro no ThemeProvider. Mantido
    só pra não quebrar o shadcn que referencia .dark em alguns lugares. */
 .dark {
-  --background: #eaeae2;
+  --background: #ececed;
   --foreground: #111111;
-  --card: #f4f4ec;
+  --card: #f8f8f9;
   --card-foreground: #111111;
-  --popover: #f4f4ec;
+  --popover: #f8f8f9;
   --popover-foreground: #111111;
   --primary: #111111;
-  --primary-foreground: #f4f4ec;
-  --secondary: #e2e2da;
+  --primary-foreground: #f8f8f9;
+  --secondary: #e4e4e7;
   --secondary-foreground: #111111;
   --brand: #2a4bff;
-  --brand-foreground: #f4f4ec;
+  --brand-foreground: #f8f8f9;
   --brand-soft: #e6ebff;
-  --muted: #e2e2da;
-  --muted-foreground: #6d6d66;
+  --muted: #e4e4e7;
+  --muted-foreground: #6b6b73;
   --accent: #e6ebff;
   --accent-foreground: #111111;
   --destructive: #b91c1c;
-  --destructive-foreground: #f4f4ec;
-  --border: rgba(17, 17, 17, 0.14);
-  --input: rgba(17, 17, 17, 0.2);
-  --input-background: #f4f4ec;
+  --destructive-foreground: #f8f8f9;
+  --border: rgba(17, 17, 17, 0.12);
+  --input: rgba(17, 17, 17, 0.18);
+  --input-background: #f8f8f9;
   --ring: rgba(42, 75, 255, 0.5);
 }
 
@@ -150,10 +150,9 @@
     font-size: var(--font-size);
   }
 
-  /* Identidade editorial: títulos em Fraunces por padrão (antes era opt-in). */
+  /* Identidade: títulos numa grotesca de marca (Space Grotesk). */
   h1, h2, h3, h4 {
-    font-family: 'Fraunces', ui-serif, Georgia, serif;
-    font-optical-sizing: auto;
+    font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
     font-weight: 600;
     line-height: 1.1;
     letter-spacing: -0.02em;
@@ -187,9 +186,7 @@
 
 /* Display family só quando chamado. */
 .font-display {
-  font-family: 'Fraunces', ui-serif, Georgia, serif;
-  font-optical-sizing: auto;
-  font-variation-settings: 'SOFT' 50, 'WONK' 0;
+  font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
   letter-spacing: -0.02em;
 }
 
@@ -216,9 +213,8 @@
 
 /* Masthead editorial reutilizável. */
 .masthead-title {
-  font-family: 'Fraunces', ui-serif, Georgia, serif;
-  font-optical-sizing: auto;
-  font-weight: 600;
+  font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 0.9;
 }

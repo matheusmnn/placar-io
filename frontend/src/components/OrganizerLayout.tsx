@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { ChevronsUpDown, LogOut } from 'lucide-react';
+import { ChevronDown, ChevronsUpDown, LogOut } from 'lucide-react';
+import { Logo } from './Logo';
 import { useAuth } from '../lib/useAuth';
 import { campeonatoAtivo } from '../lib/session';
 import { api, Campeonato } from '../lib/api';
@@ -54,10 +55,10 @@ export function OrganizerLayout({ children }: OrganizerLayoutProps) {
       <div className="max-w-[1320px] mx-auto px-6 md:px-10">
         {/* Masthead */}
         <header className="rule-double pt-6 pb-2.5 grid grid-cols-[1fr_auto_1fr] items-end gap-4">
-          <div className="font-scoreboard text-[10px] uppercase tracking-[0.22em] text-muted-foreground leading-[1.5]">
-            Edição № 129<br />Painel do organizador
+          <div className="flex items-end">
+            <Logo size="md" />
           </div>
-          <button onClick={() => navigate('/dashboard')} className="masthead-title text-[clamp(32px,6vw,60px)] text-center">
+          <button onClick={() => navigate('/dashboard')} className="masthead-title text-[clamp(32px,6vw,60px)] text-center" title="Ir pro painel">
             O&nbsp;Organizador
           </button>
           <div className="font-scoreboard text-[10px] uppercase tracking-[0.22em] text-muted-foreground leading-[1.5] text-right">
@@ -87,9 +88,10 @@ export function OrganizerLayout({ children }: OrganizerLayoutProps) {
           <div className="flex items-center gap-3 shrink-0 pl-4">
             {ativo && (
               <DropdownMenu>
-                <DropdownMenuTrigger className="group flex items-center gap-1.5 max-w-[200px]">
-                  <span className="font-scoreboard text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Ativo:</span>
-                  <span className="font-display text-sm truncate">{ativo.nome}</span>
+                <DropdownMenuTrigger className="group flex items-center gap-2 max-w-[220px] border border-border hover:border-foreground px-2.5 h-8 transition-colors">
+                  <span className="font-scoreboard text-[9px] uppercase tracking-[0.16em] text-muted-foreground leading-none">Ativo</span>
+                  <span className="w-px h-3.5 bg-border shrink-0" />
+                  <span className="font-display text-sm truncate leading-none">{ativo.nome}</span>
                   <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -108,8 +110,12 @@ export function OrganizerLayout({ children }: OrganizerLayoutProps) {
               </DropdownMenu>
             )}
             <DropdownMenu>
-              <DropdownMenuTrigger className="h-7 w-7 bg-primary text-primary-foreground flex items-center justify-center font-scoreboard text-[10px]">
-                {iniciais(usuario?.nome ?? 'U')}
+              <DropdownMenuTrigger className="group flex items-center gap-2 h-8 pl-1 pr-2 border border-border hover:border-foreground transition-colors">
+                <span className="h-6 w-6 bg-primary text-primary-foreground flex items-center justify-center font-scoreboard text-[10px]">
+                  {iniciais(usuario?.nome ?? 'U')}
+                </span>
+                <span className="hidden sm:block font-scoreboard text-[10px] uppercase tracking-[0.12em] text-muted-foreground group-hover:text-foreground">Conta</span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <div className="px-2 py-1.5">

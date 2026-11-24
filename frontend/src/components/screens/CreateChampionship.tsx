@@ -54,8 +54,8 @@ const CORES_FAIXA = [
 // Paleta "Jornal Esportivo" (1b) — paper frio, tinta quase-preta, azul elétrico.
 // Hardcoded de propósito: a tela é sempre clara, independente dos tokens do app.
 const C = {
-  paper: '#eaeae2', sheet: '#f4f4ec',
-  ink: '#111111', inkSoft: '#3b3b36', muted: '#6d6d66',
+  paper: '#ececed', sheet: '#f8f8f9',
+  ink: '#111111', inkSoft: '#3b3b3b', muted: '#6b6b73',
   blue: '#2a4bff', blueSoft: '#e6ebff', destructive: '#b91c1c',
   line: 'rgba(17,17,17,0.14)', lineSoft: 'rgba(17,17,17,0.1)', line2: 'rgba(17,17,17,0.2)',
 };
