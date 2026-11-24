@@ -22,9 +22,7 @@ interface MenuItem { path: string; label: string; match?: (p: string) => boolean
 
 const menuItems: MenuItem[] = [
   { path: '/dashboard', label: 'Painel', match: (p) => p === '/dashboard' },
-  { path: '/dashboard/novo', label: 'Novo', match: (p) => p.startsWith('/dashboard/novo') },
-  { path: '/dashboard/times', label: 'Times', match: (p) => p.startsWith('/dashboard/times') },
-  { path: '/dashboard/jogadores', label: 'Jogadores', match: (p) => p.startsWith('/dashboard/jogadores') },
+  { path: '/dashboard/times', label: 'Times', match: (p) => p.startsWith('/dashboard/times') || p.startsWith('/dashboard/jogadores') },
   { path: '/dashboard/rodadas', label: 'Rodadas', match: (p) => p.startsWith('/dashboard/rodadas') || p.startsWith('/dashboard/resultado') },
   { path: '/dashboard/sumula', label: 'Súmula', match: (p) => p.startsWith('/dashboard/sumula') },
   { path: '/dashboard/co-adms', label: 'Co-adms', match: (p) => p.startsWith('/dashboard/co-adms') },
