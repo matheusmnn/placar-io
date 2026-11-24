@@ -44,6 +44,7 @@ export function RoundsMatches() {
   const [sorteio, setSorteio] = useState<{ tipo: 'tudo' | 'rodada'; rodada?: number } | null>(null);
 
   const editavel = camp?.formato === 'PONTOS_CORRIDOS';
+  const iniciado = camp != null && camp.status !== 'NAO_INICIADO';
 
   function timesOcupados(rodada: number, excetoPartidaId?: number): Set<number> {
     const s = new Set<number>();
@@ -136,6 +137,7 @@ export function RoundsMatches() {
   }
 
   function abrirSumula(p: Partida) {
+    if (!iniciado) { setErro('Inicie o campeonato pra registrar os jogos'); return; }
     partidaAtiva.set(p.id);
     navigate('/dashboard/resultado');
   }
@@ -334,6 +336,7 @@ export function RoundsMatches() {
                 times={times}
                 timesOcupados={timesOcupados}
                 onAbrir={abrirSumula}
+                iniciado={iniciado}
                 onRecarregar={carregar}
               />
             ) : atual ? (
@@ -343,6 +346,7 @@ export function RoundsMatches() {
                   onAbrir={abrirSumula}
                   onAtualizar={atualizarPartida}
                   editavel={!!editavel}
+                  iniciado={iniciado}
                   times={times}
                   timesOcupados={timesOcupados}
                   onRemover={removerPartida}
@@ -413,13 +417,14 @@ type ListaProps = {
   onAbrir: (p: Partida) => void;
   onAtualizar: (id: number, patch: Partial<Partida>) => void;
   editavel: boolean;
+  iniciado: boolean;
   times: Time[];
   timesOcupados: TimesOcupadosFn;
   onRemover: (p: Partida) => void;
   onRecarregar: () => Promise<void>;
 };
 
-function ListaPartidasAdmin({ partidas, onAbrir, onAtualizar, editavel, times, timesOcupados, onRemover, onRecarregar }: ListaProps) {
+function ListaPartidasAdmin({ partidas, onAbrir, onAtualizar, editavel, iniciado, times, timesOcupados, onRemover, onRecarregar }: ListaProps) {
   const temLegs = partidas.some((p) => p.legOrdem != null);
   if (!temLegs) {
     return (
@@ -431,6 +436,7 @@ function ListaPartidasAdmin({ partidas, onAbrir, onAtualizar, editavel, times, t
             onAbrir={() => onAbrir(p)}
             onAtualizar={onAtualizar}
             editavel={editavel}
+            iniciado={iniciado}
             times={times}
             timesOcupados={timesOcupados}
             onRemover={() => onRemover(p)}
@@ -456,8 +462,8 @@ function ListaPartidasAdmin({ partidas, onAbrir, onAtualizar, editavel, times, t
       </div>
       {[...pares.entries()].sort(([a], [b]) => a - b).map(([k, p]) => (
         <div key={k} className="grid grid-cols-2 divide-x divide-border">
-          <div>{p.ida ? <LinhaPartida partida={p.ida} onAbrir={() => onAbrir(p.ida!)} onAtualizar={onAtualizar} editavel={false} times={times} timesOcupados={timesOcupados} onRemover={() => onRemover(p.ida!)} onRecarregar={onRecarregar} /> : vazio}</div>
-          <div>{p.volta ? <LinhaPartida partida={p.volta} onAbrir={() => onAbrir(p.volta!)} onAtualizar={onAtualizar} editavel={false} times={times} timesOcupados={timesOcupados} onRemover={() => onRemover(p.volta!)} onRecarregar={onRecarregar} /> : vazio}</div>
+          <div>{p.ida ? <LinhaPartida partida={p.ida} onAbrir={() => onAbrir(p.ida!)} onAtualizar={onAtualizar} editavel={false} iniciado={iniciado} times={times} timesOcupados={timesOcupados} onRemover={() => onRemover(p.ida!)} onRecarregar={onRecarregar} /> : vazio}</div>
+          <div>{p.volta ? <LinhaPartida partida={p.volta} onAbrir={() => onAbrir(p.volta!)} onAtualizar={onAtualizar} editavel={false} iniciado={iniciado} times={times} timesOcupados={timesOcupados} onRemover={() => onRemover(p.volta!)} onRecarregar={onRecarregar} /> : vazio}</div>
         </div>
       ))}
     </>
@@ -469,13 +475,14 @@ type LinhaProps = {
   onAbrir: () => void;
   onAtualizar: (id: number, patch: Partial<Partida>) => void;
   editavel: boolean;
+  iniciado: boolean;
   times: Time[];
   timesOcupados: TimesOcupadosFn;
   onRemover: () => void;
   onRecarregar: () => Promise<void>;
 };
 
-function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, times, timesOcupados, onRemover, onRecarregar }: LinhaProps) {
+function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, iniciado, times, timesOcupados, onRemover, onRecarregar }: LinhaProps) {
   const concluida = partida.status === 'CONCLUIDA';
   const emAndamento = partida.status === 'EM_ANDAMENTO';
   const podeEditar = partida.status === 'AGENDADA' && partida.legOrdem == null;
@@ -527,9 +534,10 @@ function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, times, timesOcu
         {clicavel && (
           <button
             onClick={onAbrir}
-            title="Preencher partida"
+            disabled={!iniciado}
+            title={iniciado ? 'Preencher partida' : 'Inicie o campeonato pra registrar os jogos'}
             aria-label="Preencher partida"
-            className="p-1.5 text-muted-foreground hover:text-brand"
+            className="p-1.5 text-muted-foreground hover:text-brand disabled:opacity-30 disabled:hover:text-muted-foreground disabled:cursor-not-allowed"
           >
             <Play className="h-4 w-4" />
           </button>
@@ -553,12 +561,13 @@ function faseLabelForMatches(timesNaFase: number): string {
   }
 }
 
-function BracketView({ rodadas, totalTimes, times, timesOcupados, onAbrir, onRecarregar }: {
+function BracketView({ rodadas, totalTimes, times, timesOcupados, onAbrir, iniciado, onRecarregar }: {
   rodadas: Rodada[];
   totalTimes: number;
   times: Time[];
   timesOcupados: TimesOcupadosFn;
   onAbrir: (p: Partida) => void;
+  iniciado: boolean;
   onRecarregar: () => Promise<void>;
 }) {
   const size = Math.max(2, nextPow2(totalTimes));
@@ -596,6 +605,7 @@ function BracketView({ rodadas, totalTimes, times, timesOcupados, onAbrir, onRec
                   ocupados={timesOcupados(p.rodada, p.id)}
                   timesOcupados={timesOcupados}
                   onAbrir={() => onAbrir(p)}
+                  iniciado={iniciado}
                   onRecarregar={onRecarregar}
                 />
               )
@@ -607,13 +617,14 @@ function BracketView({ rodadas, totalTimes, times, timesOcupados, onAbrir, onRec
   );
 }
 
-function BracketMatch({ partida, times, ocupados, timesOcupados, onAbrir, onRecarregar }: {
+function BracketMatch({ partida, times, ocupados, timesOcupados, onAbrir, iniciado, onRecarregar }: {
   partida: Partida; times: Time[]; ocupados: Set<number>; timesOcupados: TimesOcupadosFn;
-  onAbrir: () => void; onRecarregar: () => Promise<void>;
+  onAbrir: () => void; iniciado: boolean; onRecarregar: () => Promise<void>;
 }) {
   const concluida = partida.status === 'CONCLUIDA';
   const podeMexer = partida.status === 'AGENDADA';
   const clicavel = partida.mandante && partida.visitante;
+  const podeAbrir = clicavel && iniciado;
   return (
     <div className="group rounded-md border border-border bg-card my-2 overflow-hidden">
       <BracketSlot
@@ -625,7 +636,7 @@ function BracketMatch({ partida, times, ocupados, timesOcupados, onAbrir, onReca
         times={times}
         ocupados={ocupados}
         onPreenchido={onRecarregar}
-        onAbrirSumula={clicavel ? onAbrir : undefined}
+        onAbrirSumula={podeAbrir ? onAbrir : undefined}
       />
       <div className="h-px bg-border" />
       <BracketSlot
@@ -637,7 +648,7 @@ function BracketMatch({ partida, times, ocupados, timesOcupados, onAbrir, onReca
         times={times}
         ocupados={ocupados}
         onPreenchido={onRecarregar}
-        onAbrirSumula={clicavel ? onAbrir : undefined}
+        onAbrirSumula={podeAbrir ? onAbrir : undefined}
       />
       {concluida && partida.penaltisMandante != null && partida.penaltisVisitante != null && (
         <p className="text-[10px] text-muted-foreground text-center py-1 border-t border-border">
@@ -647,7 +658,7 @@ function BracketMatch({ partida, times, ocupados, timesOcupados, onAbrir, onReca
       {(clicavel || podeMexer) && (
         <div className="border-t border-border flex items-center justify-between px-1 py-0.5">
           {clicavel ? (
-            <button onClick={onAbrir} title="Preencher partida" aria-label="Preencher partida" className="p-1 text-muted-foreground hover:text-brand">
+            <button onClick={onAbrir} disabled={!iniciado} title={iniciado ? 'Preencher partida' : 'Inicie o campeonato pra registrar os jogos'} aria-label="Preencher partida" className="p-1 text-muted-foreground hover:text-brand disabled:opacity-30 disabled:hover:text-muted-foreground disabled:cursor-not-allowed">
               <Play className="h-3.5 w-3.5" />
             </button>
           ) : <span />}
