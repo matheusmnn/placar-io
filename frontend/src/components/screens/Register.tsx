@@ -72,8 +72,8 @@ export function Register() {
         </div>
 
         <div className="w-full max-w-sm mx-auto">
-          <p className="text-sm text-muted-foreground mb-2">Criar conta</p>
-          <h1 className="font-display text-3xl mb-10">Comece seu campeonato</h1>
+          <p className="font-scoreboard text-[11px] uppercase tracking-[0.22em] text-brand mb-2">Criar conta</p>
+          <h1 className="font-display text-4xl mb-10 leading-[0.95]">Comece seu<br />campeonato<span className="text-brand">.</span></h1>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {erro && (

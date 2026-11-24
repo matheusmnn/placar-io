@@ -3,94 +3,93 @@
 :root {
   --font-size: 16px;
 
-  /* Paper + ink. Tinted toward amateur football: súmula paper, caneta azul-marinho,
-     uniforme laranja restrito ao detalhe. */
-  --background: #efe7d4;
-  --foreground: #1a1d29;
+  /* Jornal Esportivo (1b). Paper frio + tinta quase-preta, azul elétrico como
+     o único acento. Página = #eaeae2, folha/card = #f4f4ec. */
+  --background: #eaeae2;
+  --foreground: #111111;
 
-  --card: #f5eee0;
-  --card-foreground: #1a1d29;
-  --popover: #f5eee0;
-  --popover-foreground: #1a1d29;
+  --card: #f4f4ec;
+  --card-foreground: #111111;
+  --popover: #f4f4ec;
+  --popover-foreground: #111111;
 
-  /* Primary = tinta de caneta: botões, chrome, texto importante. */
-  --primary: #14213d;
-  --primary-foreground: #f5eee0;
+  /* Primary = tinta: botões chapados, chrome, texto importante. */
+  --primary: #111111;
+  --primary-foreground: #f4f4ec;
 
-  --secondary: #e3d9c0;
-  --secondary-foreground: #1a1d29;
+  --secondary: #e2e2da;
+  --secondary-foreground: #111111;
 
-  /* Brand = laranja de camisa, usado só como o detalhe único de cada tela
-     (líder da tabela, 1 CTA, faixa de acesso). Não em glows nem em pills. */
-  --brand: #c84b1c;
-  --brand-foreground: #f5eee0;
-  --brand-soft: #f4dcc8;
+  /* Brand = azul elétrico, o acento único (CTA, item ativo, líder, destaque). */
+  --brand: #2a4bff;
+  --brand-foreground: #f4f4ec;
+  --brand-soft: #e6ebff;
 
-  --muted: #e3d9c0;
-  --muted-foreground: #6a6355;
+  --muted: #e2e2da;
+  --muted-foreground: #6d6d66;
 
-  --accent: #e3d9c0;
-  --accent-foreground: #1a1d29;
+  --accent: #e6ebff;
+  --accent-foreground: #111111;
 
-  --destructive: #a93326;
-  --destructive-foreground: #f5eee0;
+  --destructive: #b91c1c;
+  --destructive-foreground: #f4f4ec;
 
-  --border: rgba(26, 29, 41, 0.1);
-  --input: rgba(26, 29, 41, 0.14);
-  --input-background: #f5eee0;
-  --switch-background: #c7bea8;
+  --border: rgba(17, 17, 17, 0.14);
+  --input: rgba(17, 17, 17, 0.2);
+  --input-background: #f4f4ec;
+  --switch-background: #c7bfae;
 
-  --ring: rgba(20, 33, 61, 0.35);
-  --radius: 0.5rem;
+  --ring: rgba(42, 75, 255, 0.5);
+  --radius: 0rem;
 
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  /* Chart tokens: tinta + laranja. Nada neon. */
-  --chart-1: #14213d;
-  --chart-2: #c84b1c;
-  --chart-3: #4a7a3e;
-  --chart-4: #b8871e;
-  --chart-5: #6a6355;
+  /* Chart tokens: tinta + azul + verdes/âmbar sóbrios. */
+  --chart-1: #111111;
+  --chart-2: #2a4bff;
+  --chart-3: #2a7a4c;
+  --chart-4: #f2b544;
+  --chart-5: #6d6d66;
 
-  /* Sidebar: tinta cheia, acento laranja só no item selecionado. */
-  --sidebar: #141627;
-  --sidebar-foreground: #efe7d4;
-  --sidebar-primary: #c84b1c;
-  --sidebar-primary-foreground: #f5eee0;
-  --sidebar-accent: rgba(239, 231, 212, 0.08);
-  --sidebar-accent-foreground: #efe7d4;
-  --sidebar-border: rgba(239, 231, 212, 0.08);
-  --sidebar-ring: #c84b1c;
+  /* Sidebar/chrome editorial: folha clara, azul só no item ativo. */
+  --sidebar: #f4f4ec;
+  --sidebar-foreground: #111111;
+  --sidebar-primary: #2a4bff;
+  --sidebar-primary-foreground: #f4f4ec;
+  --sidebar-accent: rgba(17, 17, 17, 0.06);
+  --sidebar-accent-foreground: #111111;
+  --sidebar-border: rgba(17, 17, 17, 0.14);
+  --sidebar-ring: #2a4bff;
 }
 
 /* Dark ficou quebrado sem desenho — travado em claro no ThemeProvider. Mantido
    só pra não quebrar o shadcn que referencia .dark em alguns lugares. */
 .dark {
-  --background: #efe7d4;
-  --foreground: #1a1d29;
-  --card: #f5eee0;
-  --card-foreground: #1a1d29;
-  --popover: #f5eee0;
-  --popover-foreground: #1a1d29;
-  --primary: #14213d;
-  --primary-foreground: #f5eee0;
-  --secondary: #e3d9c0;
-  --secondary-foreground: #1a1d29;
-  --brand: #c84b1c;
-  --brand-foreground: #f5eee0;
-  --brand-soft: #f4dcc8;
-  --muted: #e3d9c0;
-  --muted-foreground: #6a6355;
-  --accent: #e3d9c0;
-  --accent-foreground: #1a1d29;
-  --destructive: #a93326;
-  --destructive-foreground: #f5eee0;
-  --border: rgba(26, 29, 41, 0.1);
-  --input: rgba(26, 29, 41, 0.14);
-  --input-background: #f5eee0;
-  --ring: rgba(20, 33, 61, 0.35);
+  --background: #eaeae2;
+  --foreground: #111111;
+  --card: #f4f4ec;
+  --card-foreground: #111111;
+  --popover: #f4f4ec;
+  --popover-foreground: #111111;
+  --primary: #111111;
+  --primary-foreground: #f4f4ec;
+  --secondary: #e2e2da;
+  --secondary-foreground: #111111;
+  --brand: #2a4bff;
+  --brand-foreground: #f4f4ec;
+  --brand-soft: #e6ebff;
+  --muted: #e2e2da;
+  --muted-foreground: #6d6d66;
+  --accent: #e6ebff;
+  --accent-foreground: #111111;
+  --destructive: #b91c1c;
+  --destructive-foreground: #f4f4ec;
+  --border: rgba(17, 17, 17, 0.14);
+  --input: rgba(17, 17, 17, 0.2);
+  --input-background: #f4f4ec;
+  --ring: rgba(42, 75, 255, 0.5);
 }
 
 @theme inline {
@@ -123,10 +122,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 2px;
+  --radius-xl: 4px;
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -151,11 +150,13 @@
     font-size: var(--font-size);
   }
 
-  /* Fraunces fica reservado — não aplica a todo h-tag. Só onde eu pedir .font-display. */
+  /* Identidade editorial: títulos em Fraunces por padrão (antes era opt-in). */
   h1, h2, h3, h4 {
-    font-weight: 500;
-    line-height: 1.15;
-    letter-spacing: -0.005em;
+    font-family: 'Fraunces', ui-serif, Georgia, serif;
+    font-optical-sizing: auto;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
   }
 
   label, button, input {
@@ -192,17 +193,32 @@
   letter-spacing: -0.02em;
 }
 
-/* Painel escuro para a sidebar do organizador. Ink cheio, chrome quieto. */
+/* Painel tinta: fundo chapado ink #111, paper por cima. Usado como acento
+   editorial (asides de login/cadastro, caixas de preview). */
 .panel-dark {
-  background-color: #141627;
-  color: #efe7d4;
+  background-color: #111111;
+  color: #f4f4ec;
   color-scheme: dark;
-  --background: #efe7d4;
-  --foreground: #141627;
-  --card: #1c1f32;
-  --card-foreground: #efe7d4;
-  --muted: rgba(239, 231, 212, 0.06);
-  --muted-foreground: rgba(239, 231, 212, 0.55);
-  --border: rgba(239, 231, 212, 0.1);
-  --input: rgba(239, 231, 212, 0.14);
+  --background: #f4f4ec;
+  --foreground: #111111;
+  --card: #1a1a1a;
+  --card-foreground: #f4f4ec;
+  --muted: rgba(244, 244, 236, 0.06);
+  --muted-foreground: rgba(244, 244, 236, 0.6);
+  --border: rgba(244, 244, 236, 0.14);
+  --input: rgba(244, 244, 236, 0.18);
+  --brand: #2a4bff;
+  --brand-foreground: #f4f4ec;
+}
+
+/* Filete duplo da masthead — borda tipográfica de jornal. */
+.rule-double { border-bottom: 4px double #111111; }
+
+/* Masthead editorial reutilizável. */
+.masthead-title {
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
 }

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowUpRight, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
+import { ArrowUpRight, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { OrganizerLayout } from '../OrganizerLayout';
 import { api, Campeonato, CampeonatosResponse, Formato, StatusCampeonato } from '../../lib/api';
 import { campeonatoAtivo } from '../../lib/session';
+import { useAuth } from '../../lib/useAuth';
 
 const formatoLabel: Record<Formato, string> = {
   PONTOS_CORRIDOS: 'pontos corridos',
@@ -21,8 +20,16 @@ const statusLabel: Record<StatusCampeonato, string> = {
   NAO_INICIADO: 'rascunho',
 };
 
+function saudacao(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
 export function Dashboard() {
   const navigate = useNavigate();
+  const { usuario } = useAuth();
   const [data, setData] = useState<CampeonatosResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -34,7 +41,6 @@ export function Dashboard() {
     try {
       const r = await api.listarCampeonatos();
       setData(r);
-      // Limpa ativo se ele não pertence mais ao usuário logado.
       const ativo = campeonatoAtivo.get();
       if (ativo && !r.campeonatos.some((c) => c.id === ativo.id)) {
         campeonatoAtivo.clear();
@@ -64,9 +70,7 @@ export function Dashboard() {
   }
 
   const todos = data?.campeonatos ?? [];
-  const hoje = useMemo(() => {
-    return new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-  }, []);
+  const primeiroNome = (usuario?.nome ?? '').trim().split(/\s+/)[0] || 'organizador';
 
   const q = busca.trim().toLowerCase();
   const casa = (c: Campeonato) => !q || c.nome.toLowerCase().includes(q);
@@ -77,75 +81,134 @@ export function Dashboard() {
   const rascunhos = meus.filter((c) => c.status === 'NAO_INICIADO');
   const encerrados = meus.filter((c) => c.status === 'ENCERRADO');
 
+  const meta = (c: Campeonato) => `${c.qtdTimes} times · ${formatoLabel[c.formato]} · ${statusLabel[c.status]}`;
+
   return (
     <OrganizerLayout>
-      <div className="p-10 pb-20 max-w-5xl">
-        <div className="flex items-start justify-between gap-6 mb-12">
+      <div className="pt-10 pb-24">
+        {/* Breadcrumb */}
+        <div className="font-scoreboard text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-7">Painel › Início</div>
+
+        {/* Hero: números gigantes */}
+        <div className="grid gap-9 md:grid-cols-[1.4fr_1fr_1fr_1fr] md:items-end border-b border-foreground pb-7">
           <div>
-            <p className="text-sm text-muted-foreground">{hoje}</p>
-            <h1 className="font-display text-4xl mt-2">Seu painel</h1>
+            <div className="font-scoreboard text-[11px] uppercase tracking-[0.22em] text-brand">Seu painel · hoje</div>
+            <h1 className="font-display text-[clamp(40px,7vw,68px)] leading-[0.95] mt-1">
+              {saudacao()},<br />{primeiroNome}<span className="text-brand">.</span>
+            </h1>
+            <button
+              onClick={() => navigate('/dashboard/novo')}
+              className="mt-4 inline-flex items-center gap-2.5 px-[18px] py-2.5 bg-primary text-primary-foreground"
+            >
+              <span className="text-lg leading-none">+</span>
+              <span className="font-scoreboard text-xs uppercase tracking-[0.14em]">Novo campeonato</span>
+            </button>
           </div>
-          <Button onClick={() => navigate('/dashboard/novo')}>
-            <Plus className="h-4 w-4" /> Novo campeonato
-          </Button>
+          <Figura rotulo="Em andamento" valor={emAndamento.length} destaque />
+          <Figura rotulo="Rascunhos" valor={rascunhos.length} />
+          <Figura rotulo="Encerrados" valor={encerrados.length} muted />
+        </div>
+
+        {/* Busca */}
+        <div className="flex items-center gap-4 border-b border-border py-3.5 mt-0">
+          <span className="font-scoreboard text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Buscar</span>
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="por nome do campeonato…"
+            className="flex-1 bg-transparent border-none outline-none font-display text-lg placeholder:text-muted-foreground"
+          />
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground py-10">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-12">
             <Loader2 className="h-4 w-4 animate-spin" /> Carregando
           </div>
         ) : erro ? (
-          <p className="text-sm text-destructive">{erro}</p>
+          <p className="text-sm text-destructive py-12">{erro}</p>
         ) : todos.length === 0 ? (
-          <div className="border border-dashed border-foreground/15 rounded-md p-12 text-center">
-            <p className="font-display text-xl mb-2">Nenhum campeonato ainda</p>
+          <div className="border border-dashed border-foreground/20 p-12 text-center mt-12">
+            <p className="font-display text-2xl mb-2">Nenhum campeonato ainda</p>
             <p className="text-sm text-muted-foreground mb-5">Crie o primeiro pra começar a cadastrar times e abrir súmulas.</p>
-            <Button onClick={() => navigate('/dashboard/novo')}>
-              <Plus className="h-4 w-4" /> Criar campeonato
-            </Button>
+            <button onClick={() => navigate('/dashboard/novo')} className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-scoreboard text-xs uppercase tracking-[0.14em]">
+              <span className="text-base leading-none">+</span> Criar campeonato
+            </button>
           </div>
         ) : (
-          <div className="space-y-12">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            {/* Resumo em números, sem card decorativo */}
-            <div className="grid grid-cols-3 border-t border-b border-border divide-x divide-border">
-              <Figura rotulo="Em andamento" valor={emAndamento.length} destaque />
-              <Figura rotulo="Rascunhos" valor={rascunhos.length} />
-              <Figura rotulo="Encerrados" valor={encerrados.length} />
-            </div>
+          <div className="mt-10 space-y-12">
+            {/* Em andamento — manchetes numeradas */}
+            {emAndamento.length > 0 && (
+              <section>
+                <SecHead n="I" titulo="Em andamento" tag={`${String(emAndamento.length).padStart(2, '0')} títulos`} />
+                {emAndamento.map((c, i) => (
+                  <div key={c.id} className="group grid grid-cols-[48px_1fr_auto_auto] items-baseline gap-5 py-[18px] border-b border-border">
+                    <span className="font-display text-4xl text-brand leading-none">{String(i + 1).padStart(2, '0')}</span>
+                    <button onClick={() => abrir(c)} className="min-w-0 text-left">
+                      <div className="font-display text-[26px] leading-tight truncate">{c.nome}</div>
+                      <div className="font-scoreboard text-[11px] uppercase tracking-[0.08em] text-muted-foreground mt-1">{meta(c)}</div>
+                    </button>
+                    <span className="font-scoreboard text-[9.5px] uppercase tracking-[0.14em] px-2 py-1 border border-foreground self-center">Em curso</span>
+                    <div className="flex items-center gap-1 self-center">
+                      <button onClick={() => abrir(c)} title="Abrir" className="p-1.5 text-muted-foreground hover:text-foreground"><ArrowUpRight className="h-4 w-4" /></button>
+                      <button onClick={(e) => excluir(c, e)} title="Excluir" className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                  </div>
+                ))}
+              </section>
+            )}
 
-            <Lista titulo="Em andamento" lista={emAndamento} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
-            <Lista titulo="Rascunhos" lista={rascunhos} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
-            <Lista titulo="Encerrados" lista={encerrados} abrir={abrir} excluir={excluir} editar={(c) => navigate(`/dashboard/editar/${c.id}`)} />
+            {/* Rascunhos + Encerrados em duas colunas */}
+            {(rascunhos.length > 0 || encerrados.length > 0) && (
+              <div className="grid md:grid-cols-2 gap-x-10 gap-y-10">
+                {rascunhos.length > 0 && (
+                  <section>
+                    <SecHead n="II" titulo="Rascunhos" />
+                    {rascunhos.map((c) => (
+                      <div key={c.id} className="group grid grid-cols-[1fr_auto] items-baseline gap-4 py-3 border-b border-border">
+                        <button onClick={() => navigate(`/dashboard/editar/${c.id}`)} className="min-w-0 text-left">
+                          <div className="font-display text-lg leading-tight truncate">{c.nome}</div>
+                          <div className="font-scoreboard text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground mt-0.5">{c.qtdTimes} times · {formatoLabel[c.formato]}</div>
+                        </button>
+                        <div className="flex items-center gap-2 self-center">
+                          <button onClick={() => navigate(`/dashboard/editar/${c.id}`)} className="font-scoreboard text-[10px] uppercase tracking-[0.14em] text-brand inline-flex items-center gap-1"><Pencil className="h-3 w-3" /> Editar</button>
+                          <button onClick={(e) => excluir(c, e)} title="Excluir" className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                )}
+                {encerrados.length > 0 && (
+                  <section>
+                    <SecHead n="III" titulo="Encerrados" tag={`${encerrados.length}`} />
+                    {encerrados.map((c) => (
+                      <div key={c.id} className="group grid grid-cols-[1fr_auto] items-baseline gap-4 py-3 border-b border-border">
+                        <button onClick={() => abrir(c)} className="min-w-0 text-left">
+                          <div className="font-display text-lg leading-tight truncate">{c.nome}</div>
+                          <div className="font-scoreboard text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground mt-0.5">{c.qtdTimes} times · {formatoLabel[c.formato]}</div>
+                        </button>
+                        <div className="flex items-center gap-1 self-center">
+                          <button onClick={() => abrir(c)} title="Abrir" className="p-1 text-muted-foreground hover:text-foreground"><ArrowUpRight className="h-4 w-4" /></button>
+                          <button onClick={(e) => excluir(c, e)} title="Excluir" className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                )}
+              </div>
+            )}
+
             {coAdm.length > 0 && (
               <section>
-                <div className="flex items-baseline justify-between mb-3">
-                  <h2 className="font-display text-xl">Campeonatos que administro</h2>
-                  <span className="text-xs text-muted-foreground font-scoreboard">{coAdm.length}</span>
-                </div>
-                <div className="border-y border-border divide-y divide-border">
-                  {coAdm.map((c) => (
-                    <div key={c.id} className="group grid grid-cols-[1fr_auto] items-center gap-6 py-4 px-2 -mx-2 hover:bg-foreground/[0.02] transition-colors">
-                      <button onClick={() => abrir(c)} className="min-w-0 text-left cursor-pointer">
-                        <p className="font-display text-lg leading-tight truncate">{c.nome}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          <span className="font-scoreboard">{c.qtdTimes}</span> times · {statusLabel[c.status]} · co-adm
-                        </p>
-                      </button>
-                      <button onClick={() => abrir(c)} className="text-muted-foreground group-hover:text-foreground cursor-pointer" title="Abrir">
-                        <ArrowUpRight className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <SecHead n="IV" titulo="Campeonatos que administro" tag={`${coAdm.length}`} />
+                {coAdm.map((c) => (
+                  <div key={c.id} className="group grid grid-cols-[1fr_auto] items-center gap-6 py-4 border-b border-border">
+                    <button onClick={() => abrir(c)} className="min-w-0 text-left">
+                      <p className="font-display text-lg leading-tight truncate">{c.nome}</p>
+                      <p className="font-scoreboard text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground mt-0.5">{c.qtdTimes} times · {statusLabel[c.status]} · co-adm</p>
+                    </button>
+                    <button onClick={() => abrir(c)} className="p-1.5 text-muted-foreground hover:text-foreground" title="Abrir"><ArrowUpRight className="h-4 w-4" /></button>
+                  </div>
+                ))}
               </section>
             )}
           </div>
@@ -155,63 +218,22 @@ export function Dashboard() {
   );
 }
 
-function Figura({ rotulo, valor, destaque }: { rotulo: string; valor: number; destaque?: boolean }) {
+function Figura({ rotulo, valor, destaque, muted }: { rotulo: string; valor: number; destaque?: boolean; muted?: boolean }) {
   return (
-    <div className="py-6 px-6">
-      <p className={`font-scoreboard text-5xl ${destaque ? 'text-brand' : 'text-foreground'}`}>{valor}</p>
-      <p className="text-xs text-muted-foreground mt-1">{rotulo}</p>
+    <div className="md:border-l md:border-border md:pl-6">
+      <p className="font-scoreboard text-[10px] uppercase tracking-[0.22em] text-muted-foreground">{rotulo}</p>
+      <p className={`font-display text-[clamp(48px,8vw,80px)] leading-[0.9] mt-1 ${destaque ? 'text-brand' : muted ? 'text-muted-foreground' : 'text-foreground'}`}>{valor}</p>
     </div>
   );
 }
 
-function Lista({
-  titulo, lista, abrir, excluir, editar,
-}: {
-  titulo: string;
-  lista: Campeonato[];
-  abrir: (c: Campeonato) => void;
-  excluir: (c: Campeonato, e: React.MouseEvent) => void;
-  editar: (c: Campeonato) => void;
-}) {
-  if (lista.length === 0) return null;
+function SecHead({ n, titulo, tag }: { n: string; titulo: string; tag?: string }) {
   return (
-    <section>
-      <div className="flex items-baseline justify-between mb-3">
-        <h2 className="font-display text-xl">{titulo}</h2>
-        <span className="text-xs text-muted-foreground font-scoreboard">{lista.length}</span>
-      </div>
-      <div className="border-y border-border divide-y divide-border">
-        {lista.map((c) => (
-          <div key={c.id} className="group grid grid-cols-[1fr_auto_auto_auto] items-center gap-6 py-4 px-2 -mx-2 hover:bg-foreground/[0.02] transition-colors">
-            <button onClick={() => abrir(c)} className="min-w-0 text-left cursor-pointer">
-              <p className="font-display text-lg leading-tight truncate">{c.nome}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                <span className="font-scoreboard">{c.qtdTimes}</span> times · {statusLabel[c.status]} · {/* eslint-disable-next-line */}
-                {['EM_ANDAMENTO', 'ENCERRADO', 'NAO_INICIADO'].includes(c.status) && formatoLabel[c.formato]}
-              </p>
-            </button>
-            <button onClick={() => abrir(c)} className="text-muted-foreground group-hover:text-foreground cursor-pointer" title="Abrir">
-              <ArrowUpRight className="h-4 w-4" />
-            </button>
-            {c.status === 'NAO_INICIADO' ? (
-              <button
-                onClick={(e) => { e.stopPropagation(); editar(c); }}
-                className="p-1.5 text-muted-foreground hover:text-foreground rounded-md"
-                title="Editar"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            ) : <span />}
-            <button
-              onClick={(e) => excluir(c, e)}
-              className="p-1.5 text-muted-foreground hover:text-destructive rounded-md"
-              title="Excluir"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
-    </section>
+    <div className="flex items-baseline gap-3.5 border-b border-foreground pb-1.5 mb-2.5">
+      <span className="font-scoreboard text-[11px] text-brand tracking-[0.18em]">{n}.</span>
+      <span className="font-display text-[22px]">{titulo}</span>
+      <span className="flex-1" />
+      {tag && <span className="font-scoreboard text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{tag}</span>}
+    </div>
   );
 }

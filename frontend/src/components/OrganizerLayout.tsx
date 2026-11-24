@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { LayoutDashboard, Trophy, Users, UserCircle, Calendar, ClipboardList, ChevronsUpDown, LogOut, UsersRound } from 'lucide-react';
-import { Logo } from './Logo';
+import { ChevronsUpDown, LogOut } from 'lucide-react';
 import { useAuth } from '../lib/useAuth';
 import { campeonatoAtivo } from '../lib/session';
 import { api, Campeonato } from '../lib/api';
@@ -18,21 +17,16 @@ function iniciais(nome: string): string {
   return (primeira + ultima).toUpperCase() || 'U';
 }
 
-interface MenuItem {
-  path: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  match?: (p: string) => boolean;
-}
+interface MenuItem { path: string; label: string; match?: (p: string) => boolean; }
 
 const menuItems: MenuItem[] = [
-  { path: '/dashboard', label: 'Painel', icon: LayoutDashboard, match: (p) => p === '/dashboard' },
-  { path: '/dashboard/novo', label: 'Novo campeonato', icon: Trophy, match: (p) => p.startsWith('/dashboard/novo') },
-  { path: '/dashboard/times', label: 'Times', icon: Users, match: (p) => p.startsWith('/dashboard/times') },
-  { path: '/dashboard/jogadores', label: 'Jogadores', icon: UserCircle, match: (p) => p.startsWith('/dashboard/jogadores') },
-  { path: '/dashboard/rodadas', label: 'Rodadas', icon: Calendar, match: (p) => p.startsWith('/dashboard/rodadas') || p.startsWith('/dashboard/resultado') },
-  { path: '/dashboard/sumula', label: 'Configurar súmula', icon: ClipboardList, match: (p) => p.startsWith('/dashboard/sumula') },
-  { path: '/dashboard/co-adms', label: 'Co-adms', icon: UsersRound, match: (p) => p.startsWith('/dashboard/co-adms') },
+  { path: '/dashboard', label: 'Painel', match: (p) => p === '/dashboard' },
+  { path: '/dashboard/novo', label: 'Novo', match: (p) => p.startsWith('/dashboard/novo') },
+  { path: '/dashboard/times', label: 'Times', match: (p) => p.startsWith('/dashboard/times') },
+  { path: '/dashboard/jogadores', label: 'Jogadores', match: (p) => p.startsWith('/dashboard/jogadores') },
+  { path: '/dashboard/rodadas', label: 'Rodadas', match: (p) => p.startsWith('/dashboard/rodadas') || p.startsWith('/dashboard/resultado') },
+  { path: '/dashboard/sumula', label: 'Súmula', match: (p) => p.startsWith('/dashboard/sumula') },
+  { path: '/dashboard/co-adms', label: 'Co-adms', match: (p) => p.startsWith('/dashboard/co-adms') },
 ];
 
 export function OrganizerLayout({ children }: OrganizerLayoutProps) {
@@ -53,80 +47,85 @@ export function OrganizerLayout({ children }: OrganizerLayoutProps) {
 
   function handleSair() { sair(); navigate('/'); }
 
+  const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' });
+
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="panel-dark w-64 shrink-0 flex flex-col sticky top-0 h-screen">
-        <div className="px-5 pt-6 pb-8">
-          <Logo size="md" tone="light" />
-        </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="max-w-[1320px] mx-auto px-6 md:px-10">
+        {/* Masthead */}
+        <header className="rule-double pt-6 pb-2.5 grid grid-cols-[1fr_auto_1fr] items-end gap-4">
+          <div className="font-scoreboard text-[10px] uppercase tracking-[0.22em] text-muted-foreground leading-[1.5]">
+            Edição № 129<br />Painel do organizador
+          </div>
+          <button onClick={() => navigate('/dashboard')} className="masthead-title text-[clamp(32px,6vw,60px)] text-center">
+            O&nbsp;Organizador
+          </button>
+          <div className="font-scoreboard text-[10px] uppercase tracking-[0.22em] text-muted-foreground leading-[1.5] text-right">
+            {hoje}<br />{usuario?.nome ?? 'organizador'}
+          </div>
+        </header>
 
-        <nav className="flex-1 px-3 space-y-0.5">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = item.match ? item.match(location.pathname) : location.pathname === item.path;
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-3 h-9 rounded-md text-sm transition-colors relative ${
-                  isActive
-                    ? 'bg-sidebar-accent text-background'
-                    : 'text-background/70 hover:bg-background/5 hover:text-background'
-                }`}
-              >
-                {isActive && <span className="absolute left-0 top-2 bottom-2 w-0.5 bg-brand rounded-full" />}
-                <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+        {/* Nav bar */}
+        <nav className="border-b border-foreground flex items-center justify-between gap-4 overflow-x-auto">
+          <div className="flex items-center gap-5 md:gap-7">
+            {menuItems.map((item) => {
+              const active = item.match ? item.match(location.pathname) : location.pathname === item.path;
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  className={`font-scoreboard text-[11px] uppercase tracking-[0.14em] py-3.5 whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                    active ? 'border-brand text-foreground font-bold' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
 
-        {ativo && (
-          <div className="mx-4 mb-3 border-t border-background/10 pt-4">
-            <p className="text-xs text-background/50">Campeonato ativo</p>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="w-full flex items-center gap-1.5 text-left text-sm text-background hover:text-background mt-0.5 group">
-                <span className="truncate flex-1">{ativo.nome}</span>
-                <ChevronsUpDown className="h-3.5 w-3.5 text-background/50 group-hover:text-background shrink-0" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                {campeonatos.filter((c) => c.id !== ativo.id).map((c) => (
-                  <DropdownMenuItem key={c.id} onClick={() => trocarCampeonato(c)}>
-                    <span className="truncate">{c.nome}</span>
+          <div className="flex items-center gap-3 shrink-0 pl-4">
+            {ativo && (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="group flex items-center gap-1.5 max-w-[200px]">
+                  <span className="font-scoreboard text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Ativo:</span>
+                  <span className="font-display text-sm truncate">{ativo.nome}</span>
+                  <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {campeonatos.filter((c) => c.id !== ativo.id).map((c) => (
+                    <DropdownMenuItem key={c.id} onClick={() => trocarCampeonato(c)}>
+                      <span className="truncate">{c.nome}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  {campeonatos.filter((c) => c.id !== ativo.id).length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum outro campeonato.</div>
+                  )}
+                  <DropdownMenuItem onClick={() => navigate('/dashboard')} className="border-t mt-1 pt-1.5">
+                    Ver todos os campeonatos
                   </DropdownMenuItem>
-                ))}
-                {campeonatos.filter((c) => c.id !== ativo.id).length === 0 && (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum outro campeonato.</div>
-                )}
-                <DropdownMenuItem onClick={() => navigate('/dashboard')} className="border-t mt-1 pt-1.5">
-                  Ver todos os campeonatos
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="h-7 w-7 bg-primary text-primary-foreground flex items-center justify-center font-scoreboard text-[10px]">
+                {iniciais(usuario?.nome ?? 'U')}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <div className="px-2 py-1.5">
+                  <p className="text-sm truncate">{usuario?.nome ?? 'Organizador'}</p>
+                  <p className="text-xs text-muted-foreground truncate">{usuario?.email ?? ''}</p>
+                </div>
+                <DropdownMenuItem onClick={handleSair} className="border-t mt-1 pt-1.5">
+                  <LogOut className="h-4 w-4" /> Sair da conta
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        )}
+        </nav>
 
-        <div className="p-4 border-t border-sidebar-border space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-md bg-background/10 flex items-center justify-center text-xs text-background">
-              {iniciais(usuario?.nome ?? 'U')}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-background truncate">{usuario?.nome ?? 'Organizador'}</p>
-              <p className="text-xs text-background/50 truncate">{usuario?.email ?? ''}</p>
-            </div>
-          </div>
-          <button
-            onClick={handleSair}
-            className="w-full flex items-center justify-center gap-2 h-9 rounded-md border border-background/20 text-sm text-background hover:bg-background/10 transition-colors"
-          >
-            <LogOut className="h-4 w-4" /> Sair da conta
-          </button>
-        </div>
-      </aside>
-
-      <main className="flex-1 min-w-0">{children}</main>
+        <main className="min-w-0">{children}</main>
+      </div>
     </div>
   );
 }

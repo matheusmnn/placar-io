@@ -65,8 +65,8 @@ export function Login() {
         </div>
 
         <div className="w-full max-w-sm mx-auto">
-          <p className="text-sm text-muted-foreground mb-2">Entrar</p>
-          <h1 className="font-display text-3xl mb-10">Continue de onde parou</h1>
+          <p className="font-scoreboard text-[11px] uppercase tracking-[0.22em] text-brand mb-2">Entrar</p>
+          <h1 className="font-display text-4xl mb-10 leading-[0.95]">Continue de<br />onde parou<span className="text-brand">.</span></h1>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {erro && (
