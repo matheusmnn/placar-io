@@ -6,8 +6,9 @@ import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { OrganizerLayout } from '../OrganizerLayout';
+import { SetupTrilha } from '../SetupTrilha';
 import { TeamShield } from '../TeamShield';
-import { api, ApiError, Grupo, Time } from '../../lib/api';
+import { api, ApiError, Campeonato, Grupo, Time } from '../../lib/api';
 import { campeonatoAtivo, timeAtivo } from '../../lib/session';
 
 const FORMATOS_COM_GRUPOS = new Set(['GRUPOS', 'GRUPOS_MATA_MATA']);
@@ -23,6 +24,7 @@ export function RegisterTeams() {
 
   const [inscritos, setInscritos] = useState<Time[]>([]);
   const [meusTimes, setMeusTimes] = useState<Time[]>([]);
+  const [camp, setCamp] = useState<Campeonato | null>(null);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [temGrupos, setTemGrupos] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,6 +53,7 @@ export function RegisterTeams() {
 
       if (ativo) {
         const camp = await api.obterCampeonato(ativo.id);
+        setCamp(camp);
         const temG = FORMATOS_COM_GRUPOS.has(camp.formato);
         setTemGrupos(temG);
         const [ts, gs] = await Promise.all([
@@ -63,6 +66,16 @@ export function RegisterTeams() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function iniciar() {
+    if (!ativo) return;
+    try {
+      await api.iniciarCampeonato(ativo.id);
+      await carregar();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível iniciar o campeonato');
     }
   }
 
@@ -166,6 +179,8 @@ export function RegisterTeams() {
             {ativo ? `${inscritos.length} inscritos` : `${meusTimes.length} cadastrados`}
           </span>
         </div>
+
+        {camp && <SetupTrilha camp={camp} passo="times" onIniciar={iniciar} />}
 
         {erro && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive mb-6">{erro}</div>}
 

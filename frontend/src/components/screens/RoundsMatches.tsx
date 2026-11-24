@@ -6,6 +6,7 @@ import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { OrganizerLayout } from '../OrganizerLayout';
+import { SetupTrilha } from '../SetupTrilha';
 import { TeamShield } from '../TeamShield';
 import { api, ApiError, Campeonato, Partida, Rodada, Time, TimeResumo } from '../../lib/api';
 import { campeonatoAtivo, partidaAtiva } from '../../lib/session';
@@ -79,6 +80,16 @@ export function RoundsMatches() {
       setIdx(Math.max(0, aberta));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function iniciar() {
+    if (!ativo) return;
+    try {
+      await api.iniciarCampeonato(ativo.id);
+      await carregar();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível iniciar o campeonato');
     }
   }
 
@@ -225,6 +236,8 @@ export function RoundsMatches() {
             )}
           </div>
         </div>
+
+        {camp && <SetupTrilha camp={camp} passo="rodadas" onIniciar={iniciar} />}
 
         {erro && <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive mb-6">{erro}</div>}
 
