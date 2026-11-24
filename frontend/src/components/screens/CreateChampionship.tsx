@@ -100,6 +100,9 @@ export function CreateChampionship() {
   const [timesSelecionados, setTimesSelecionados] = useState<Set<number>>(new Set());
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Estrutura congela quando o campeonato já começou ou tem partidas geradas:
+  // só vínculo e faixas continuam editáveis.
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     api.listarCampeonatos().then((r) => setOutros(r.campeonatos)).catch(() => setOutros([]));
@@ -127,6 +130,7 @@ export function CreateChampionship() {
         setDataFim(c.dataFim ? c.dataFim.slice(0, 10) : '');
         setVinculadoId(c.campeonatoVinculadoId != null ? String(c.campeonatoVinculadoId) : 'nenhum');
         setFaixas(c.faixasTabela ?? []);
+        setLocked(c.status !== 'NAO_INICIADO' || !!c.temPartidas);
       }).catch(() => setErro('Não foi possível carregar o campeonato'));
     }
   }, [editandoId]);
@@ -241,6 +245,12 @@ export function CreateChampionship() {
             <div className="font-scoreboard" style={{ margin: '20px 0 0', border: `1px solid ${C.destructive}`, background: '#f7e0de', color: C.destructive, padding: '8px 12px', fontSize: 12, letterSpacing: '0.04em' }}>{erro}</div>
           )}
 
+          {locked && (
+            <div className="font-scoreboard" style={{ margin: '20px 0 0', border: `1px solid ${C.blue}`, background: C.blueSoft, color: C.ink, padding: '8px 12px', fontSize: 12, letterSpacing: '0.03em', lineHeight: 1.5 }}>
+              Campeonato já começou / tem partidas geradas. Só o <strong>vínculo</strong> e as <strong>faixas</strong> podem mudar — o resto fica congelado.
+            </div>
+          )}
+
           {/* Corpo: form + preview */}
           <div className="grid gap-10 lg:grid-cols-[1fr_320px]" style={{ padding: '28px 0 8px', borderTop: `1px solid ${C.line2}`, marginTop: 20 }}>
 
@@ -251,25 +261,29 @@ export function CreateChampionship() {
               <section>
                 <SectionHead n={roman()} title="Identificação" tag="obrigatório" />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                  <label style={{ display: 'block' }}>
-                    <span className="font-scoreboard" style={cap}>Nome</span>
-                    <input className="font-display" style={{ ...underline, fontSize: 26 }} placeholder="Copa Zona Leste 2026" value={nome} onChange={(e) => setNome(e.target.value)} />
-                  </label>
-                  <div className="grid grid-cols-2 gap-6">
-                    <label style={{ display: 'block' }}>
-                      <span className="font-scoreboard" style={cap}>Início</span>
-                      <input className="font-scoreboard" type="date" style={{ ...underline, fontSize: 15 }} value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-                    </label>
-                    <label style={{ display: 'block' }}>
-                      <span className="font-scoreboard" style={cap}>Término</span>
-                      <input className="font-scoreboard" type="date" style={{ ...underline, fontSize: 15 }} value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
-                    </label>
-                  </div>
-                  <label style={{ display: 'block' }}>
-                    <span className="font-scoreboard" style={cap}>Descrição ou regulamento</span>
-                    <textarea rows={3} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Regras específicas, premiação, local"
-                      style={{ background: 'transparent', border: `1px solid ${C.line2}`, outline: 'none', padding: '8px 10px', width: '100%', resize: 'vertical', fontSize: 13, color: C.ink, fontFamily: 'inherit' }} />
-                  </label>
+                  <Frozen on={locked}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                      <label style={{ display: 'block' }}>
+                        <span className="font-scoreboard" style={cap}>Nome</span>
+                        <input className="font-display" disabled={locked} style={{ ...underline, fontSize: 26 }} placeholder="Copa Zona Leste 2026" value={nome} onChange={(e) => setNome(e.target.value)} />
+                      </label>
+                      <div className="grid grid-cols-2 gap-6">
+                        <label style={{ display: 'block' }}>
+                          <span className="font-scoreboard" style={cap}>Início</span>
+                          <input className="font-scoreboard" type="date" disabled={locked} style={{ ...underline, fontSize: 15 }} value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+                        </label>
+                        <label style={{ display: 'block' }}>
+                          <span className="font-scoreboard" style={cap}>Término</span>
+                          <input className="font-scoreboard" type="date" disabled={locked} style={{ ...underline, fontSize: 15 }} value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+                        </label>
+                      </div>
+                      <label style={{ display: 'block' }}>
+                        <span className="font-scoreboard" style={cap}>Descrição ou regulamento</span>
+                        <textarea rows={3} disabled={locked} value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Regras específicas, premiação, local"
+                          style={{ background: 'transparent', border: `1px solid ${C.line2}`, outline: 'none', padding: '8px 10px', width: '100%', resize: 'vertical', fontSize: 13, color: C.ink, fontFamily: 'inherit' }} />
+                      </label>
+                    </div>
+                  </Frozen>
                   <label style={{ display: 'block' }}>
                     <span className="font-scoreboard" style={cap}>Vincular a (liga Série A ↔ Série B)</span>
                     <select style={selectStyle} value={vinculadoId} onChange={(e) => setVinculadoId(e.target.value)}>
@@ -283,6 +297,7 @@ export function CreateChampionship() {
               {/* Formato */}
               <section>
                 <SectionHead n={roman()} title="Formato da disputa" tag={opcao.label} />
+                <Frozen on={locked}>
                 <div style={{ borderTop: `1px solid ${C.lineSoft}` }}>
                   {FORMATOS.map((f) => {
                     const sel = f.value === formato;
@@ -339,23 +354,27 @@ export function CreateChampionship() {
                   {formato === 'PONTOS_CORRIDOS' && <Switch label="Turno e returno" sub="todos jogam em casa e fora" on={idaVolta} onChange={setIdaVolta} />}
                   {formato === 'GRUPOS' && <Switch label="Ida e volta no grupo" sub="confrontos dobrados" on={idaVolta} onChange={setIdaVolta} />}
                 </div>
+                </Frozen>
               </section>
 
               {/* Pontuação & duração */}
               <section>
                 <SectionHead n={roman()} title="Pontuação & duração" />
+                <Frozen on={locked}>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {formato !== 'MATA_MATA' && <StepCell label="Pts vitória" value={pontosVitoria} onChange={setPontosVitoria} min={0} max={10} />}
                   {formato !== 'MATA_MATA' && <StepCell label="Pts empate" value={pontosEmpate} onChange={setPontosEmpate} min={0} max={10} />}
                   <StepCell label="1º tempo (min)" value={duracao1T} onChange={setDuracao1T} min={1} max={90} />
                   <StepCell label="2º tempo (min)" value={duracao2T} onChange={setDuracao2T} min={1} max={90} />
                 </div>
+                </Frozen>
               </section>
 
               {/* Critérios */}
               {formato !== 'MATA_MATA' && (
                 <section>
                   <SectionHead n={roman()} title="Critérios de desempate" tag="ordem aplica depois dos pontos" />
+                  <Frozen on={locked}>
                   <div>
                     {criterios.map((c, i) => (
                       <div key={c} style={{ display: 'grid', gridTemplateColumns: '40px 1fr auto', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${C.lineSoft}` }}>
@@ -374,6 +393,7 @@ export function CreateChampionship() {
                       <button key={c} type="button" onClick={() => toggleCriterio(c)} className="font-scoreboard" style={{ all: 'unset', cursor: 'pointer', fontSize: 11, padding: '5px 10px', border: `1px dashed ${C.line2}`, color: C.muted }}>+ {CRITERIOS_INFO[c]}</button>
                     ))}
                   </div>
+                  </Frozen>
                 </section>
               )}
 
@@ -463,7 +483,7 @@ export function CreateChampionship() {
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="button" onClick={() => navigate('/dashboard')} disabled={loading} style={{ all: 'unset', cursor: loading ? 'default' : 'pointer', padding: '10px 18px', fontSize: 13, color: C.ink, opacity: loading ? 0.5 : 1 }}>Cancelar</button>
               <button type="button" onClick={salvar} disabled={loading} className="font-scoreboard" style={{ all: 'unset', cursor: loading ? 'default' : 'pointer', padding: '10px 22px', background: C.blue, color: C.sheet, fontSize: 12, letterSpacing: '0.06em', fontWeight: 600, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 8, opacity: loading ? 0.6 : 1 }}>
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}{editando ? 'Salvar alterações' : 'Abrir campeonato →'}
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}{locked ? 'Salvar vínculo e faixas' : editando ? 'Salvar alterações' : 'Abrir campeonato →'}
               </button>
             </div>
           </div>
@@ -471,6 +491,12 @@ export function CreateChampionship() {
       </div>
     </OrganizerLayout>
   );
+}
+
+// Congela uma seção (estrutura imutável depois que o campeonato começa).
+function Frozen({ on, children }: { on: boolean; children: ReactNode }) {
+  if (!on) return <>{children}</>;
+  return <div aria-disabled style={{ opacity: 0.5, pointerEvents: 'none' }}>{children}</div>;
 }
 
 function SectionHead({ n, title, tag }: { n: string; title: string; tag?: string }) {

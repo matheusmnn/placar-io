@@ -119,6 +119,7 @@ export interface Campeonato {
   logoUrl: string | null;
   qtdTimes: number;
   papel: 'dono' | 'co-adm';
+  temPartidas?: boolean; // só vem no obterCampeonato; indica estrutura congelada
 }
 
 export interface CampeonatosResponse {

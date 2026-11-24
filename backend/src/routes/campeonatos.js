@@ -137,7 +137,8 @@ campeonatosRouter.get(
     const id = Number(req.params.id);
     const c = await getCampLeitura(req.userId, id);
     const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
-    res.json(toCampDto(c, qtdTimes, c.usuarioId === req.userId ? 'dono' : 'co-adm'));
+    const temPartidas = !!(await prisma.partida.findFirst({ where: { campeonatoId: id }, select: { id: true } }));
+    res.json({ ...toCampDto(c, qtdTimes, c.usuarioId === req.userId ? 'dono' : 'co-adm'), temPartidas });
   }),
 );
 
@@ -189,15 +190,30 @@ campeonatosRouter.put(
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const atual = await getCamp(req.userId, id, 'gerenciar');
-    if (atual.status !== 'NAO_INICIADO') throw conflict('Campeonato já iniciado — não pode ser editado');
-    const temPartida = await prisma.partida.findFirst({ where: { campeonatoId: id }, select: { id: true } });
-    if (temPartida) throw conflict('Remova as partidas geradas antes de editar o campeonato');
 
     const data = campeonatoSchema.parse(req.body);
     const vinculadoId =
       data.campeonatoVinculadoId === undefined
         ? undefined
         : await resolverVinculo(req.userId, data.campeonatoVinculadoId, id);
+
+    // Vínculo e faixas (metadados de exibição) podem mudar a qualquer momento.
+    // A estrutura (formato, pontos, grupos, critérios, datas…) congela assim que
+    // o campeonato começa ou ganha partidas geradas.
+    const temPartida = await prisma.partida.findFirst({ where: { campeonatoId: id }, select: { id: true } });
+    if (atual.status !== 'NAO_INICIADO' || temPartida) {
+      const c = await prisma.campeonato.update({
+        where: { id },
+        data: {
+          faixasTabela: data.faixasTabela === undefined ? undefined : data.faixasTabela,
+          campeonatoVinculadoId: vinculadoId,
+        },
+      });
+      const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
+      res.json(toCampDto(c, qtdTimes, c.usuarioId === req.userId ? 'dono' : 'co-adm'));
+      return;
+    }
+
     const novoFormato = data.formato ?? atual.formato;
     const temGrupos = novoFormato === 'GRUPOS' || novoFormato === 'GRUPOS_MATA_MATA';
     const novoNumGrupos = temGrupos ? (data.numGrupos ?? atual.numGrupos ?? 2) : null;

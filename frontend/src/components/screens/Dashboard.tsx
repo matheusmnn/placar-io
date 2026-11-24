@@ -149,6 +149,7 @@ export function Dashboard() {
                     </button>
                     <span className="font-scoreboard text-[9.5px] uppercase tracking-[0.14em] px-2 py-1 border border-foreground self-center">Em curso</span>
                     <div className="flex items-center gap-1 self-center">
+                      <button onClick={() => navigate(`/dashboard/editar/${c.id}`)} title="Editar vínculo e faixas" className="p-1.5 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"><Pencil className="h-3.5 w-3.5" /></button>
                       <button onClick={() => abrir(c)} title="Abrir" className="p-1.5 text-muted-foreground hover:text-foreground"><ArrowUpRight className="h-4 w-4" /></button>
                       <button onClick={(e) => excluir(c, e)} title="Excluir" className="p-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
@@ -187,6 +188,7 @@ export function Dashboard() {
                           <div className="font-scoreboard text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground mt-0.5">{c.qtdTimes} times · {formatoLabel[c.formato]}</div>
                         </button>
                         <div className="flex items-center gap-1 self-center">
+                          <button onClick={() => navigate(`/dashboard/editar/${c.id}`)} title="Editar vínculo e faixas" className="p-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"><Pencil className="h-3.5 w-3.5" /></button>
                           <button onClick={() => abrir(c)} title="Abrir" className="p-1 text-muted-foreground hover:text-foreground"><ArrowUpRight className="h-4 w-4" /></button>
                           <button onClick={(e) => excluir(c, e)} title="Excluir" className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
