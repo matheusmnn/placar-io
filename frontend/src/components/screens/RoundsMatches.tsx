@@ -99,7 +99,8 @@ export function RoundsMatches() {
     setErro(null);
     setGerando(true);
     try {
-      setRodadas(await api.gerarRodadas(ativo.id));
+      await api.gerarRodadas(ativo.id);
+      await carregar();
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Não foi possível gerar as rodadas');
     } finally {
