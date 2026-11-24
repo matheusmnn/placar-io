@@ -34,7 +34,6 @@ export async function gerarChaveManual(campeonatoId) {
       },
     });
   }
-  await prisma.campeonato.update({ where: { id: campeonatoId }, data: { status: 'EM_ANDAMENTO' } });
   return listarRodadas(campeonatoId);
 }
 
@@ -69,8 +68,6 @@ export async function gerarRodadas(campeonatoId) {
   } else {
     throw badRequest(`Formato ${camp.formato} não suportado`);
   }
-
-  await prisma.campeonato.update({ where: { id: campeonatoId }, data: { status: 'EM_ANDAMENTO' } });
 
   if (camp.formato === 'MATA_MATA') await verificarAvancoMataMata(camp, 1);
   if (camp.formato === 'GRUPOS_MATA_MATA') await verificarAvancoGrupos(camp);
@@ -512,12 +509,19 @@ async function verificarAvancoGrupos(camp) {
   await verificarAvancoMataMata(camp, 1);
 }
 
+export function statusAoFechar(statusAtual, todasConcluidas) {
+  if (todasConcluidas) return 'ENCERRADO';
+  if (statusAtual === 'ENCERRADO') return 'EM_ANDAMENTO'; // reabrir ao desfazer resultado
+  return statusAtual; // rascunho continua rascunho; só "Iniciar" tira de NAO_INICIADO
+}
+
 async function verificarEncerramento(campeonatoId) {
   const todas = await prisma.partida.findMany({ where: { campeonatoId } });
   const todasConcluidas = todas.length > 0 && todas.every((p) => p.status === 'CONCLUIDA');
+  const camp = await prisma.campeonato.findUnique({ where: { id: campeonatoId }, select: { status: true } });
   await prisma.campeonato.update({
     where: { id: campeonatoId },
-    data: { status: todasConcluidas ? 'ENCERRADO' : 'EM_ANDAMENTO' },
+    data: { status: statusAoFechar(camp.status, todasConcluidas) },
   });
 }
 

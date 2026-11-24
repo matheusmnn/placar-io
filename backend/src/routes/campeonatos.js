@@ -414,6 +414,18 @@ campeonatosRouter.post(
   }),
 );
 
+campeonatosRouter.post(
+  '/:id/iniciar',
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const camp = await getCamp(req.userId, id, 'calendario');
+    if (camp.status !== 'NAO_INICIADO') throw conflict('Campeonato já foi iniciado');
+    const atualizado = await prisma.campeonato.update({ where: { id }, data: { status: 'EM_ANDAMENTO' } });
+    const qtdTimes = await prisma.inscricaoCampeonato.count({ where: { campeonatoId: id } });
+    res.json(toCampDto(atualizado, qtdTimes, camp.usuarioId === req.userId ? 'dono' : 'co-adm'));
+  }),
+);
+
 campeonatosRouter.get(
   '/:id/partidas',
   asyncHandler(async (req, res) => {
