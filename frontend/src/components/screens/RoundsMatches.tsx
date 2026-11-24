@@ -464,7 +464,7 @@ type LinhaProps = {
 function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, times, timesOcupados, onRemover, onRecarregar }: LinhaProps) {
   const concluida = partida.status === 'CONCLUIDA';
   const emAndamento = partida.status === 'EM_ANDAMENTO';
-  const podeEditar = editavel && partida.status === 'AGENDADA';
+  const podeEditar = partida.status === 'AGENDADA' && partida.legOrdem == null;
   const emptyMandante = !partida.mandante;
   const emptyVisitante = !partida.visitante;
   const temVazio = emptyMandante || emptyVisitante;
@@ -570,6 +570,7 @@ function BracketView({ rodadas, totalTimes, times, timesOcupados, onAbrir, onRec
                   partida={p}
                   times={times}
                   ocupados={timesOcupados(p.rodada, p.id)}
+                  timesOcupados={timesOcupados}
                   onAbrir={() => onAbrir(p)}
                   onRecarregar={onRecarregar}
                 />
@@ -582,15 +583,15 @@ function BracketView({ rodadas, totalTimes, times, timesOcupados, onAbrir, onRec
   );
 }
 
-function BracketMatch({ partida, times, ocupados, onAbrir, onRecarregar }: {
-  partida: Partida; times: Time[]; ocupados: Set<number>;
+function BracketMatch({ partida, times, ocupados, timesOcupados, onAbrir, onRecarregar }: {
+  partida: Partida; times: Time[]; ocupados: Set<number>; timesOcupados: TimesOcupadosFn;
   onAbrir: () => void; onRecarregar: () => Promise<void>;
 }) {
   const concluida = partida.status === 'CONCLUIDA';
   const podeMexer = partida.status === 'AGENDADA';
   const clicavel = partida.mandante && partida.visitante;
   return (
-    <div className="rounded-md border border-border bg-card my-2 overflow-hidden">
+    <div className="group rounded-md border border-border bg-card my-2 overflow-hidden">
       <BracketSlot
         partidaId={partida.id}
         time={partida.mandante}
@@ -618,6 +619,11 @@ function BracketMatch({ partida, times, ocupados, onAbrir, onRecarregar }: {
         <p className="text-[10px] text-muted-foreground text-center py-1 border-t border-border">
           pên {partida.penaltisMandante}–{partida.penaltisVisitante}
         </p>
+      )}
+      {podeMexer && (
+        <div className="border-t border-border flex justify-end px-1 py-0.5">
+          <MenuPartida partida={partida} times={times} timesOcupados={timesOcupados} onRemover={() => {}} onRecarregar={onRecarregar} />
+        </div>
       )}
     </div>
   );
@@ -727,12 +733,13 @@ function MenuPartida({ partida, times, timesOcupados, onRemover, onRecarregar }:
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const ocupados = timesOcupados(rodada, partida.id);
+  const ehGrupoOuFase = partida.grupoId != null || partida.fase != null;
 
   async function salvar() {
     setErro(null);
     setSalvando(true);
     try {
-      await api.atualizarPartida(partida.id, { mandanteId, visitanteId, rodada });
+      await api.atualizarPartida(partida.id, ehGrupoOuFase ? { mandanteId, visitanteId } : { mandanteId, visitanteId, rodada });
       await onRecarregar();
       setOpen(false);
     } catch (err) {
@@ -783,15 +790,19 @@ function MenuPartida({ partida, times, timesOcupados, onRemover, onRecarregar }:
             {times.map((t) => <option key={t.id} value={t.id} disabled={t.id === mandanteId || (ocupados.has(t.id) && t.id !== visitanteId)}>{t.nome}</option>)}
           </select>
         </div>
-        <div className="space-y-1">
-          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Rodada</label>
-          <Input type="number" min={1} value={rodada} onChange={(e) => setRodada(Number(e.target.value))} />
-        </div>
+        {!ehGrupoOuFase && (
+          <div className="space-y-1">
+            <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Rodada</label>
+            <Input type="number" min={1} value={rodada} onChange={(e) => setRodada(Number(e.target.value))} />
+          </div>
+        )}
         {erro && <p className="text-xs text-destructive">{erro}</p>}
         <div className="flex items-center justify-between gap-2 pt-1">
-          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { setOpen(false); onRemover(); }}>
-            <Trash2 className="h-3.5 w-3.5" /> Remover
-          </Button>
+          {ehGrupoOuFase ? <span /> : (
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { setOpen(false); onRemover(); }}>
+              <Trash2 className="h-3.5 w-3.5" /> Remover
+            </Button>
+          )}
           <Button size="sm" disabled={salvando || !mandanteId || !visitanteId || mandanteId === visitanteId} onClick={salvar}>
             {salvando ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar'}
           </Button>

@@ -159,6 +159,7 @@ export interface Partida {
   fase: string | null;
   ordemFase: number | null;
   legOrdem: number | null;
+  grupoId: number | null;
   status: StatusPartida;
   dataPartida: string | null;
   local: string | null;

@@ -59,8 +59,8 @@ export function LiveMatch() {
     return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
   }, []);
 
-  async function recarregar(id: number) {
-    setLoading(true);
+  async function recarregar(id: number, silent = false) {
+    if (!silent) setLoading(true);
     try {
       const d = await api.obterPartida(id);
       setDet(d);
@@ -256,7 +256,7 @@ export function LiveMatch() {
               serie={partida.penaltisSerie ?? null}
               mandante={partida.mandante}
               visitante={partida.visitante}
-              onSaved={() => partidaId ? recarregar(partidaId) : Promise.resolve()}
+              onSaved={() => partidaId ? recarregar(partidaId, true) : Promise.resolve()}
             />
           </div>
         )}

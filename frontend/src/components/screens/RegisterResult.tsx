@@ -110,8 +110,8 @@ export function RegisterResult() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function recarregar(id: number) {
-    setLoading(true);
+  async function recarregar(id: number, silent = false) {
+    if (!silent) setLoading(true);
     try {
       const d = await api.obterPartida(id);
       setDet(d);
@@ -251,7 +251,7 @@ export function RegisterResult() {
             partida={partida}
             cronologia={det.cronologia}
             salvando={salvando}
-            onPenaltisSaved={() => recarregar(partida.id)}
+            onPenaltisSaved={() => recarregar(partida.id, true)}
             salvar1T={async ({ m, v }) => {
               await withBusy(() => api.salvarCronologia(partida.id, {
                 placar1TMandante: m,

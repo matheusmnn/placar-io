@@ -581,6 +581,7 @@ export function toPartidaDto(p) {
     fase: p.fase,
     ordemFase: p.ordemFase,
     legOrdem: p.legOrdem,
+    grupoId: p.grupoId ?? null,
     status: p.status,
     dataPartida: p.dataPartida,
     local: p.local,
