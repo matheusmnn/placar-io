@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Plus, Shuffle, Trash2 } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ExternalLink, Loader2, Pencil, Play, Plus, Shuffle, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Input } from '../ui/input';
@@ -509,11 +509,21 @@ function LinhaPartida({ partida, onAbrir, onAtualizar, editavel, times, timesOcu
         {partida.local && <p>{partida.local}</p>}
         {emAndamento && <p className="text-brand mt-1">súmula aberta</p>}
       </div>
-      {podeEditar ? (
-        <MenuPartida partida={partida} times={times} timesOcupados={timesOcupados} onRemover={onRemover} onRecarregar={onRecarregar} />
-      ) : (
-        <div className="w-8" />
-      )}
+      <div className="flex items-center justify-end gap-1 min-w-8">
+        {clicavel && (
+          <button
+            onClick={onAbrir}
+            title="Preencher partida"
+            aria-label="Preencher partida"
+            className="p-1.5 text-muted-foreground hover:text-brand"
+          >
+            <Play className="h-4 w-4" />
+          </button>
+        )}
+        {podeEditar && (
+          <MenuPartida partida={partida} times={times} timesOcupados={timesOcupados} onRemover={onRemover} onRecarregar={onRecarregar} />
+        )}
+      </div>
     </div>
   );
 }
